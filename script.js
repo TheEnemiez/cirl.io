@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const gameContainer = document.getElementById('game-container');
     const playerNameInput = document.getElementById('playerNameInput');
     const numBotsInput = document.getElementById('numBotsInput');
-    const botTypeSelect = document.getElementById('botTypeSelect'); // Get the new select element
+    const botTypeSelect = document.getElementById('botTypeSelect');
     const startGameButton = document.getElementById('startGameButton');
     const restartGameButton = document.getElementById('restartGameButton');
     const gameOverMessage = document.getElementById('gameOverMessage');
@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const playerMassDisplay = document.getElementById('playerMassDisplay');
     const playerCellCountDisplay = document.getElementById('playerCellCountDisplay');
     const leaderboardList = document.getElementById('leaderboardList');
+    const playerGlobalMergeCooldownDisplay = document.getElementById('playerGlobalMergeCooldownDisplay');
+
 
     let gameLoopId;
     let player;
@@ -37,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const GRID_SIZE = 50;
 
     const PLAYER_START_MASS = 100;
-    const BOT_START_MASS = 10; // Minions might start small
+    const BOT_START_MASS = 10;
     const FOOD_MASS = 1;
     const FOOD_RADIUS = 6;
     const MAX_FOOD_COUNT = 250;
@@ -48,38 +50,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const VIRUS_SPAWN_INTERVAL = 2500;
     const VIRUS_EAT_MASS_MULTIPLIER = 1.3;
     const VIRUS_FED_LIMIT = 215;
-    const VIRUS_COLOR = '#00ff00'; // Green
-    const VIRUS_SPLIT_MASS_LOW_MIN = 130; // Min mass of cell to be split by virus
-    const VIRUS_SPLIT_MASS_LOW_MAX = 300; // Upper bound for "standard" virus split
+    const VIRUS_COLOR = '#00ff00';
+    const VIRUS_SPLIT_MASS_LOW_MIN = 130;
+    const VIRUS_SPLIT_MASS_LOW_MAX = 300;
     const VIRUS_SPLIT_LOW_MAX_PIECES = 10;
-    const VIRUS_SPLIT_HIGH_MIN_PIECES = 9; // For the old pattern (mass > LOW_MAX and <= 300)
+    const VIRUS_SPLIT_HIGH_MIN_PIECES = 9;
 
     const SPEWED_MASS_COST = 20;
     const SPEWED_MASS_YIELD = 18;
     const SPEWED_MASS_RADIUS = 18;
     const MIN_SPEW_MASS_TOTAL = 50;
     const SPEWED_MASS_SPEED = 25;
-    const SPEWED_MASS_LIFESPAN = 60 * 10000; // Long lifespan
+    const SPEWED_MASS_LIFESPAN = 60 * 10000;
 
-    const CELL_MIN_MASS_TO_SPLIT_FROM = 20; // A cell must be at least this mass to initiate a split
-    const MIN_MASS_PER_SPLIT_PIECE = 10;    // Each piece resulting from a split must be at least this mass
-    const MAX_PLAYER_CELLS = 32;
+    const CELL_MIN_MASS_TO_SPLIT_FROM = 20;
+    const MIN_MASS_PER_SPLIT_PIECE = 10;
+    const MAX_PLAYER_CELLS = 256;
     const EAT_MASS_RATIO = 1.3;
 
-    const MASS_DECAY_RATE_PER_SECOND = 0.005; // 0.5% per second
-    const MASS_DECAY_INTERVAL = 1000; // 1 second
+    const MASS_DECAY_RATE_PER_SECOND = 0.005;
+    const MASS_DECAY_INTERVAL = 1000;
 
-    const MERGE_TIME_MIN_MASS = 100;
-    const MERGE_TIME_MAX_MASS = 2000;
-    const MERGE_TIME_MIN_MS = 500
-    const MERGE_TIME_MAX_MS = 5000
+    const GLOBAL_MERGE_COOLDOWN_MIN_TOTAL_MASS = PLAYER_START_MASS;
+    const GLOBAL_MERGE_COOLDOWN_MAX_TOTAL_MASS = 500;
+    const GLOBAL_MERGE_COOLDOWN_MIN_MS = 200;
+    const GLOBAL_MERGE_COOLDOWN_MAX_MS = 400;
+
     const CELL_OVERLAP_RESOLUTION_FACTOR = 0.2;
     const CELL_SPLIT_EJECT_SPEED_BASE = 40;
     const CELL_SPLIT_EJECT_DURATION = 2500;
-    const CELL_EJECTION_DAMPING = 0.99;
+    const CELL_EJECTION_DAMPING = 0.99; // Keep this for ejectionVx/Vy
     const SPEWED_MASS_DAMPING = 0.98;
 
-    const PLAYER_RESPAWN_DELAY = 3000; // 3 seconds
+    const PLAYER_RESPAWN_DELAY = 3000;
     let playerRespawnTimer = 0;
     let isPlayerDead = false;
 
@@ -88,10 +91,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastVirusSpawnTime = 0;
     let lastLeaderboardUpdateTime = 0;
 
-    // Store the chosen bot AI type for the current game session
-    let currentGameBotAiType = 'minion'; // Default if not set otherwise
+    let currentGameBotAiType = 'minion';
 
-    const WORLD_CONSTANTS = { MAP_WIDTH, MAP_HEIGHT, MIN_SPEW_MASS: MIN_SPEW_MASS_TOTAL, CELL_MIN_MASS_TO_SPLIT: CELL_MIN_MASS_TO_SPLIT_FROM, MAX_PLAYER_CELLS };
+    const WORLD_CONSTANTS = { MAP_WIDTH, MAP_HEIGHT, MIN_SPEW_MASS: MIN_SPEW_MASS_TOTAL, CELL_MIN_MASS_TO_SPLIT: CELL_MIN_MASS_TO_SPLIT_FROM, MAX_PLAYER_CELLS, VIRUS_MASS_ABSORBED: VIRUS_MASS_DEFAULT, VIRUS_MAX_SPLIT: VIRUS_SPLIT_LOW_MAX_PIECES };
+
 
     let uniqueIdCounter = 0;
     function getUniqueId() { return uniqueIdCounter++; }
@@ -103,7 +106,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // --- Entity Classes ---
     class Entity {
         constructor(x, y, mass, color) {
             this.id = getUniqueId();
@@ -111,13 +113,9 @@ document.addEventListener('DOMContentLoaded', () => {
             this.mass = mass; this.color = color;
             this.radius = 0;
             this.targetRadius = 4 + Math.sqrt(this.mass) * 4;
-            this.radius = this.targetRadius;
+            this.radius = this.targetRadius; // Initialize directly
         }
-
-        updateRadiusAndTarget() {
-            this.targetRadius = 4 + Math.sqrt(this.mass) * 4;
-        }
-
+        updateRadiusAndTarget() { this.targetRadius = 4 + Math.sqrt(this.mass) * 4; }
         animateRadiusLogic(dtFrameFactor) {
             const animationSpeed = 0.08;
             if (Math.abs(this.radius - this.targetRadius) > 0.05) {
@@ -126,7 +124,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.radius = this.targetRadius;
             }
         }
-
         draw(ctx) {
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
@@ -143,78 +140,103 @@ document.addEventListener('DOMContentLoaded', () => {
             super(x, y, mass, color);
             this.name = name;
             this.ownerId = ownerId;
-            this.vx = 0; this.vy = 0;
             this.isBot = isBot;
-            this.mergeTimer = 0;
-            this.ejectionVx = 0; this.ejectionVy = 0;
+
+            this.vx = 0; // Current smoothed, applied velocity X
+            this.vy = 0; // Current smoothed, applied velocity Y
+
+            this.ejectionVx = 0; // Raw ejection velocity (decays)
+            this.ejectionVy = 0; // Raw ejection velocity (decays)
             this.ejectionTimer = 0;
-            this.updateRadiusAndTarget();
-            this.radius = this.targetRadius;
+
+            this.splitPartnerId = null; // ID of the cell it recently split from/created
+            this.splitPassthroughEndTime = 0; // Timestamp when passthrough rule with partner ends
+
+            this.updateRadiusAndTarget(); // Sets targetRadius based on initial mass
+            // Radius is set in Entity constructor
         }
 
         updateSelf(dt, dtFrameFactor, targetWorldX, targetWorldY) {
-            if (this.mergeTimer > 0) this.mergeTimer -= dt;
-
             this.animateRadiusLogic(dtFrameFactor);
 
-            let finalVx = 0;
-            let finalVy = 0;
-            let isEjecting = this.ejectionTimer > 0;
+            let desiredSpeed = Math.max(0.5, 8 - Math.log(this.mass + 1) * 1.3);
+            let intendedVx = 0;
+            let intendedVy = 0;
 
-            if (isEjecting) {
-                finalVx += this.ejectionVx;
-                finalVy += this.ejectionVy;
+            const isActuallyEjectingWithForce = (Math.abs(this.ejectionVx) > 0.01 || Math.abs(this.ejectionVy) > 0.01) && this.ejectionTimer > 0;
 
-                this.ejectionTimer -= dt;
-                this.ejectionVx *= CELL_EJECTION_DAMPING;
-                this.ejectionVy *= CELL_EJECTION_DAMPING;
-
+            if (isActuallyEjectingWithForce) {
                 const angleToMouse = Math.atan2(targetWorldY - this.y, targetWorldX - this.x);
-                const baseSpeed = Math.max(0.5, 8 - Math.log(this.mass + 1) * 1.3);
+                const playerControlSpeed = desiredSpeed;
 
                 let blendFactor = 0;
                 const remainingEjectionRatio = this.ejectionTimer > 0 ? this.ejectionTimer / CELL_SPLIT_EJECT_DURATION : 0;
-                const currentEjectionSpeedSq = this.ejectionVx * this.ejectionVx + this.ejectionVy * this.ejectionVy;
+                const ejectionMagnitude = Math.sqrt(this.ejectionVx ** 2 + this.ejectionVy ** 2);
 
-                if (currentEjectionSpeedSq < (baseSpeed * 0.3 * baseSpeed * 0.3)) {
-                    blendFactor = Math.min(1, (1 - remainingEjectionRatio) + 0.5);
+                if (ejectionMagnitude < playerControlSpeed * 0.4 || remainingEjectionRatio < 0.4) {
+                    blendFactor = Math.min(1, (1 - remainingEjectionRatio) * 1.2 + (1 - Math.min(1, ejectionMagnitude / (playerControlSpeed * 0.4 + 0.1))) * 0.8);
                 } else {
-                    blendFactor = 1 - remainingEjectionRatio;
+                    blendFactor = (1 - remainingEjectionRatio) * 0.3;
                 }
-                blendFactor = Math.max(0, Math.min(1, blendFactor * 1.5));
+                blendFactor = Math.max(0, Math.min(1, blendFactor));
 
-                finalVx = (this.ejectionVx * (1 - blendFactor)) + (Math.cos(angleToMouse) * baseSpeed * blendFactor);
-                finalVy = (this.ejectionVy * (1 - blendFactor)) + (Math.sin(angleToMouse) * baseSpeed * blendFactor);
+                const playerControlledVx = Math.cos(angleToMouse) * playerControlSpeed;
+                const playerControlledVy = Math.sin(angleToMouse) * playerControlSpeed;
 
-                if (this.ejectionTimer <= 0 || (Math.abs(this.ejectionVx) < 0.05 && Math.abs(this.ejectionVy) < 0.05)) {
-                    this.ejectionTimer = 0;
-                    this.ejectionVx = 0;
-                    this.ejectionVy = 0;
-                    isEjecting = false;
-                }
-            }
+                intendedVx = (this.ejectionVx * (1 - blendFactor)) + (playerControlledVx * blendFactor);
+                intendedVy = (this.ejectionVy * (1 - blendFactor)) + (playerControlledVy * blendFactor);
 
-            if (!isEjecting) {
+                this.ejectionVx *= CELL_EJECTION_DAMPING;
+                this.ejectionVy *= CELL_EJECTION_DAMPING;
+
+            } else {
                 const angle = Math.atan2(targetWorldY - this.y, targetWorldX - this.x);
-                const speed = Math.max(0.5, 8 - Math.log(this.mass + 1) * 1.3);
-                finalVx = Math.cos(angle) * speed;
-                finalVy = Math.sin(angle) * speed;
+                intendedVx = Math.cos(angle) * desiredSpeed;
+                intendedVy = Math.sin(angle) * desiredSpeed;
             }
 
-            this.x += finalVx * dtFrameFactor;
-            this.y += finalVy * dtFrameFactor;
+            const movementSmoothingFactor = 0.15;
+            this.vx += (intendedVx - this.vx) * movementSmoothingFactor * dtFrameFactor;
+            this.vy += (intendedVy - this.vy) * movementSmoothingFactor * dtFrameFactor;
+
+            this.x += this.vx * dtFrameFactor;
+            this.y += this.vy * dtFrameFactor;
 
             this.x = Math.max(this.radius, Math.min(this.x, MAP_WIDTH - this.radius));
             this.y = Math.max(this.radius, Math.min(this.y, MAP_HEIGHT - this.radius));
+
+            if (this.ejectionTimer > 0) {
+                this.ejectionTimer -= dt;
+                if (this.ejectionTimer <= 0) {
+                    this.ejectionTimer = 0;
+                    this.ejectionVx = 0;
+                    this.ejectionVy = 0;
+                } else {
+                    if (isActuallyEjectingWithForce && Math.abs(this.ejectionVx) < 0.05 && Math.abs(this.ejectionVy) < 0.05) {
+                        this.ejectionVx = 0;
+                        this.ejectionVy = 0;
+                    }
+                }
+            }
         }
+
         decayMass() {
             const minMassThreshold = this.isBot ? BOT_START_MASS : PLAYER_START_MASS;
             const massToLose = Math.floor(this.mass * MASS_DECAY_RATE_PER_SECOND);
-            if (this.mass - massToLose >= minMassThreshold / 2) { this.mass -= massToLose; }
-            else if (this.mass > minMassThreshold / 2) { this.mass = minMassThreshold / 2; }
-            this.updateRadiusAndTarget();
-        }
+            let massChanged = false;
 
+            if (this.mass - massToLose >= MIN_MASS_PER_SPLIT_PIECE / 2) {
+                this.mass -= massToLose;
+                massChanged = true;
+            } else if (this.mass > MIN_MASS_PER_SPLIT_PIECE / 2 && massToLose > 0) {
+                this.mass = MIN_MASS_PER_SPLIT_PIECE / 2;
+                massChanged = true;
+            }
+
+            if (massChanged) {
+                this.updateRadiusAndTarget();
+            }
+        }
         draw(ctx) {
             super.draw(ctx);
             if (this.name) {
@@ -238,10 +260,11 @@ document.addEventListener('DOMContentLoaded', () => {
             this.id = id; this.name = name; this.color = color;
             this.cells = []; this.isBot = isBot;
             this.targetX = MAP_WIDTH / 2; this.targetY = MAP_HEIGHT / 2;
+            this.globalMergeCooldown = 0;
             this.spawnInitialCell(startMass);
             if (isBot && aiType && AiTypes[aiType]) {
                 this.ai = new AiTypes[aiType](this, WORLD_CONSTANTS);
-            } else if (isBot) { // Fallback for bots if AI type is invalid
+            } else if (isBot) {
                 console.warn(`Invalid AI type specified: ${aiType}. Defaulting to 'random' for bot ${name}`);
                 this.ai = new AiTypes['random'](this, WORLD_CONSTANTS);
             }
@@ -250,11 +273,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const cellRadius = 4 + Math.sqrt(mass) * 4;
             const spawnPos = findSafeSpawnPosition(cellRadius * 1.5, this.isBot ? "bot" : "player");
             const newCell = new Cell(spawnPos.x, spawnPos.y, mass, this.color, this.name, this.id, this.isBot);
-            newCell.mergeTimer = this.calculateMergeTime(newCell.mass);
             this.cells.push(newCell);
         }
         respawn() {
-            this.cells = []; this.spawnInitialCell(PLAYER_START_MASS);
+            this.cells = [];
+            this.globalMergeCooldown = 0;
+            this.spawnInitialCell(PLAYER_START_MASS);
             if (!this.isBot) {
                 isPlayerDead = false; playerRespawnTimer = 0;
                 const com = this.getCenterOfMassCell();
@@ -272,14 +296,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (totalMass === 0) return { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2, radius: 10, mass: 0 };
             return { x: comX / totalMass, y: comY / totalMass, radius: maxRadius, mass: totalMass };
         }
-        calculateMergeTime(mass) {
-            if (mass <= MERGE_TIME_MIN_MASS) return MERGE_TIME_MIN_MS;
-            if (mass >= MERGE_TIME_MAX_MASS) return MERGE_TIME_MAX_MS;
-            const ratio = (mass - MERGE_TIME_MIN_MASS) / (MERGE_TIME_MAX_MASS - MERGE_TIME_MIN_MASS);
-            return MERGE_TIME_MIN_MS + ratio * (MERGE_TIME_MAX_MS - MERGE_TIME_MIN_MS);
+        calculateGlobalMergeCooldown(totalMass) {
+            if (totalMass <= GLOBAL_MERGE_COOLDOWN_MIN_TOTAL_MASS) return GLOBAL_MERGE_COOLDOWN_MIN_MS;
+            if (totalMass >= GLOBAL_MERGE_COOLDOWN_MAX_TOTAL_MASS) return GLOBAL_MERGE_COOLDOWN_MAX_MS;
+            const ratio = (totalMass - GLOBAL_MERGE_COOLDOWN_MIN_TOTAL_MASS) /
+                (GLOBAL_MERGE_COOLDOWN_MAX_TOTAL_MASS - GLOBAL_MERGE_COOLDOWN_MIN_TOTAL_MASS);
+            return GLOBAL_MERGE_COOLDOWN_MIN_MS + ratio * (GLOBAL_MERGE_COOLDOWN_MAX_MS - GLOBAL_MERGE_COOLDOWN_MIN_MS);
         }
 
+
         update(dt, dtFrameFactor) {
+            if (this.globalMergeCooldown > 0) {
+                this.globalMergeCooldown -= dt;
+                if (this.globalMergeCooldown < 0) this.globalMergeCooldown = 0;
+            }
+
             if (this.isBot && this.ai) {
                 this.ai.update(dt, { food, viruses, players: [player, ...bots.filter(b => b !== this)] });
             }
@@ -291,103 +322,141 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (this.cells.length > 1) {
-                for (let i = 0; i < this.cells.length; i++) {
-                    for (let j = i + 1; j < this.cells.length; j++) {
-                        const cell1 = this.cells[i]; const cell2 = this.cells[j];
-                        if (!cell1 || !cell2) continue;
+                // STAGE 1: Overlap Resolution (if globalMergeCooldown > 0)
+                if (this.globalMergeCooldown > 0) {
+                    const now = Date.now();
+                    for (let i = 0; i < this.cells.length; i++) {
+                        for (let j = i + 1; j < this.cells.length; j++) {
+                            const cell1 = this.cells[i];
+                            const cell2 = this.cells[j];
 
-                        if (cell1.ejectionTimer > 0 && cell2.ejectionTimer > 0) {
-                            const dx_check = cell2.x - cell1.x;
-                            const dy_check = cell2.y - cell1.y;
-                            const distanceSq_check = dx_check * dx_check + dy_check * dy_check;
-                            if (distanceSq_check < 0.1) {
-                                const nudgeAngle = Math.random() * Math.PI * 2;
-                                const nudgeAmount = 0.5;
-                                cell1.x -= Math.cos(nudgeAngle) * nudgeAmount * 0.5;
-                                cell1.y -= Math.sin(nudgeAngle) * nudgeAmount * 0.5;
-                                cell2.x += Math.cos(nudgeAngle) * nudgeAmount * 0.5;
-                                cell2.y += Math.sin(nudgeAngle) * nudgeAmount * 0.5;
-                            }
-                            continue;
-                        }
+                            if (!cell1 || !cell2) continue;
 
-                        const dx = cell2.x - cell1.x; const dy = cell2.y - cell1.y;
-                        const distanceSq = dx * dx + dy * dy;
-                        const sumRadii = cell1.radius + cell2.radius;
-
-                        if (distanceSq < (sumRadii * sumRadii) && distanceSq > 0.001) {
-                            const distance = Math.sqrt(distanceSq);
-                            const overlap = sumRadii - distance;
-
-                            if (overlap > 0) {
-                                const invDistance = 1 / distance;
-                                const normDx = dx * invDistance;
-                                const normDy = dy * invDistance;
-                                const moveAmount = overlap * CELL_OVERLAP_RESOLUTION_FACTOR;
-                                const totalMassForOverlap = cell1.mass + cell2.mass;
-                                let move1Factor = 0.5;
-                                let move2Factor = 0.5;
-
-                                if (totalMassForOverlap > 0) {
-                                    move1Factor = cell2.mass / totalMassForOverlap;
-                                    move2Factor = cell1.mass / totalMassForOverlap;
-                                }
-                                move1Factor = Math.max(0.1, Math.min(0.9, move1Factor));
-                                move2Factor = 1.0 - move1Factor;
-
-                                if (cell1.ejectionTimer <= 0) {
-                                    cell1.x -= normDx * moveAmount * move1Factor;
-                                    cell1.y -= normDy * moveAmount * move1Factor;
-                                }
-                                if (cell2.ejectionTimer <= 0) {
-                                    cell2.x += normDx * moveAmount * move2Factor;
-                                    cell2.y += normDy * moveAmount * move2Factor;
-                                }
-
-                                [cell1, cell2].forEach(c => {
-                                    if (c.ejectionTimer <= 0) {
-                                        c.x = Math.max(c.radius, Math.min(c.x, MAP_WIDTH - c.radius));
-                                        c.y = Math.max(c.radius, Math.min(c.y, MAP_HEIGHT - c.radius));
+                            let passthroughActiveForThisPair = false;
+                            if (cell1.splitPartnerId === cell2.id && cell2.splitPartnerId === cell1.id) {
+                                if (now < cell1.splitPassthroughEndTime && now < cell2.splitPassthroughEndTime) {
+                                    passthroughActiveForThisPair = true;
+                                    // Check for separation
+                                    const dx_sep = cell2.x - cell1.x;
+                                    const dy_sep = cell2.y - cell1.y;
+                                    const distSq_sep = dx_sep * dx_sep + dy_sep * dy_sep;
+                                    const sumRadii_sep = cell1.radius + cell2.radius;
+                                    // Use a slight tolerance (e.g., 0.95 of sumRadii^2) to ensure they are clear
+                                    if (distSq_sep >= sumRadii_sep * sumRadii_sep * 0.95) {
+                                        cell1.splitPartnerId = null; cell1.splitPassthroughEndTime = 0;
+                                        cell2.splitPartnerId = null; cell2.splitPassthroughEndTime = 0;
+                                        passthroughActiveForThisPair = false;
                                     }
-                                });
+                                } else {
+                                    // Timer expired
+                                    cell1.splitPartnerId = null; cell1.splitPassthroughEndTime = 0;
+                                    cell2.splitPartnerId = null; cell2.splitPassthroughEndTime = 0;
+                                    passthroughActiveForThisPair = false;
+                                }
+                            }
+
+                            if (passthroughActiveForThisPair) {
+                                continue; // This specific parent-child pair ignores each other for pushing
+                            }
+
+                            // If not a passthrough pair, proceed with standard overlap resolution
+                            // This logic respects individual cell ejectionTimers for general push immunity
+                            const dx = cell2.x - cell1.x;
+                            const dy = cell2.y - cell1.y;
+                            const distanceSq = dx * dx + dy * dy;
+                            const sumRadii = cell1.radius + cell2.radius;
+
+                            if (distanceSq < (sumRadii * sumRadii) && distanceSq > 0.001) {
+                                const distance = Math.sqrt(distanceSq);
+                                const overlap = sumRadii - distance;
+                                if (overlap > 0) {
+                                    const invDistance = 1 / distance;
+                                    const normDx = dx * invDistance;
+                                    const normDy = dy * invDistance;
+                                    const moveAmount = overlap * CELL_OVERLAP_RESOLUTION_FACTOR;
+                                    const totalMassForOverlap = cell1.mass + cell2.mass;
+                                    let move1Factor = 0.5; let move2Factor = 0.5;
+
+                                    if (totalMassForOverlap > 0) {
+                                        move1Factor = cell2.mass / totalMassForOverlap;
+                                        move2Factor = cell1.mass / totalMassForOverlap;
+                                    }
+                                    move1Factor = Math.max(0.1, Math.min(0.9, move1Factor));
+                                    move2Factor = 1.0 - move1Factor;
+
+                                    // A cell is pushed only if its own ejectionTimer is not active
+                                    // (meaning it's not currently in an ejection state that grants push immunity)
+                                    if (cell1.ejectionTimer <= 0) {
+                                        cell1.x -= normDx * moveAmount * move1Factor;
+                                        cell1.y -= normDy * moveAmount * move1Factor;
+                                    }
+                                    if (cell2.ejectionTimer <= 0) {
+                                        cell2.x += normDx * moveAmount * move2Factor;
+                                        cell2.y += normDy * moveAmount * move2Factor;
+                                    }
+
+                                    // Boundary checks for cells that were potentially pushed
+                                    [cell1, cell2].forEach(c => {
+                                        if ((c === cell1 && cell1.ejectionTimer <= 0) || (c === cell2 && cell2.ejectionTimer <= 0)) {
+                                            c.x = Math.max(c.radius, Math.min(c.x, MAP_WIDTH - c.radius));
+                                            c.y = Math.max(c.radius, Math.min(c.y, MAP_HEIGHT - c.radius));
+                                        }
+                                    });
+                                }
                             }
                         }
                     }
                 }
 
-                let mergedInThisCycle = true;
-                while (mergedInThisCycle) {
-                    mergedInThisCycle = false;
-                    for (let i = 0; i < this.cells.length; i++) {
-                        for (let j = i + 1; j < this.cells.length; j++) {
-                            const cell1 = this.cells[i]; const cell2 = this.cells[j];
-                            if (!cell1 || !cell2) continue;
+                // STAGE 2: Actual Merge Processing (if cooldown is over)
+                if (this.globalMergeCooldown <= 0 && this.cells.length > 1) {
+                    let cellsToProcess = [...this.cells];
+                    let mergedInThisPass;
 
-                            const dx = cell2.x - cell1.x; const dy = cell2.y - cell1.y;
-                            const distanceSq = dx * dx + dy * dy;
-                            const canPhysicallyMerge = distanceSq < Math.max(cell1.radius, cell2.radius) ** 2 * 0.7;
+                    do {
+                        mergedInThisPass = false;
+                        let cellsToRemove = new Set();
 
-                            if (cell1.mergeTimer <= 0 && cell2.mergeTimer <= 0 && canPhysicallyMerge) {
-                                const absorbingCell = cell1.mass >= cell2.mass ? cell1 : cell2;
-                                const absorbedCell = cell1.mass < cell2.mass ? cell1 : cell2;
-                                const M1_old = absorbingCell.mass; const M2 = absorbedCell.mass;
-                                const totalNewMass = M1_old + M2;
+                        for (let i = 0; i < cellsToProcess.length; i++) {
+                            for (let j = i + 1; j < cellsToProcess.length; j++) {
+                                const cell1 = cellsToProcess[i];
+                                const cell2 = cellsToProcess[j];
 
-                                if (totalNewMass > 0) {
-                                    absorbingCell.x = (absorbingCell.x * M1_old + absorbedCell.x * M2) / totalNewMass;
-                                    absorbingCell.y = (absorbingCell.y * M1_old + absorbedCell.y * M2) / totalNewMass;
+                                if (cellsToRemove.has(cell1.id) || cellsToRemove.has(cell2.id)) {
+                                    continue;
                                 }
-                                absorbingCell.mass = totalNewMass;
-                                absorbingCell.updateRadiusAndTarget();
-                                absorbingCell.mergeTimer = this.calculateMergeTime(absorbingCell.mass);
 
-                                const absorbedIndex = this.cells.indexOf(absorbedCell);
-                                if (absorbedIndex > -1) this.cells.splice(absorbedIndex, 1);
-                                mergedInThisCycle = true; break;
+                                const dx = cell2.x - cell1.x;
+                                const dy = cell2.y - cell1.y;
+                                const distanceSq = dx * dx + dy * dy;
+                                const canPhysicallyMerge = distanceSq < (Math.max(cell1.radius, cell2.radius) ** 2);
+
+                                if (canPhysicallyMerge) {
+                                    const absorbingCell = cell1.mass >= cell2.mass ? cell1 : cell2;
+                                    const absorbedCell = cell1.mass < cell2.mass ? cell1 : cell2;
+
+                                    if (cellsToRemove.has(absorbingCell.id)) continue;
+
+                                    const M1_old = absorbingCell.mass;
+                                    const M2 = absorbedCell.mass;
+                                    const totalNewMass = M1_old + M2;
+
+                                    absorbingCell.mass = totalNewMass;
+                                    absorbingCell.updateRadiusAndTarget();
+
+                                    cellsToRemove.add(absorbedCell.id);
+                                    mergedInThisPass = true;
+                                }
                             }
                         }
-                        if (mergedInThisCycle) break;
-                    }
+
+                        if (mergedInThisPass) {
+                            cellsToProcess = cellsToProcess.filter(c => !cellsToRemove.has(c.id));
+                        }
+
+                    } while (mergedInThisPass && cellsToProcess.length > 1);
+
+                    this.cells = cellsToProcess;
                 }
             }
             this.cells = this.cells.filter(cell => cell.mass > 0);
@@ -397,64 +466,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
         initiateSplit() {
             if (this.cells.length >= MAX_PLAYER_CELLS) return;
-
             const MAX_EJECT_SPEED_BONUS_FROM_MASS = 15;
             const BASE_EJECT_SPEED_FACTOR = 3.0;
 
             const cellsToConsiderSplitting = [...this.cells];
             let currentTotalCellCount = this.cells.length;
+            let splitOccurred = false;
+            const now = Date.now();
+            const passthroughDuration = 1500; // ms
 
             for (const cell of cellsToConsiderSplitting) {
                 if (currentTotalCellCount >= MAX_PLAYER_CELLS) break;
-                if (!this.cells.includes(cell) || cell.mass < CELL_MIN_MASS_TO_SPLIT_FROM) {
-                    continue;
-                }
+                if (!this.cells.includes(cell) || cell.mass < CELL_MIN_MASS_TO_SPLIT_FROM) continue;
 
                 const originalMass = cell.mass;
                 const massOfParentPiece = Math.floor(originalMass / 2);
                 const massOfNewPiece = originalMass - massOfParentPiece;
 
-                if (massOfNewPiece < MIN_MASS_PER_SPLIT_PIECE || massOfParentPiece < MIN_MASS_PER_SPLIT_PIECE) {
-                    continue;
-                }
+                if (massOfNewPiece < MIN_MASS_PER_SPLIT_PIECE || massOfParentPiece < MIN_MASS_PER_SPLIT_PIECE) continue;
 
+                // --- PARENT CELL MODIFICATION ---
                 cell.mass = massOfParentPiece;
                 cell.updateRadiusAndTarget();
+                // Short ejectionTimer for parent's own movement style (standard control) and brief general push immunity.
+                cell.ejectionTimer = Math.min(100, CELL_SPLIT_EJECT_DURATION / 10);
+                cell.ejectionVx = 0;
+                cell.ejectionVy = 0;
+                // splitPartnerId and splitPassthroughEndTime will be set after newCell is created.
+                // --- END PARENT CELL MODIFICATION ---
 
                 const angle = this.isBot ?
                     (this.ai && (this.targetX !== undefined) ? Math.atan2(this.targetY - cell.y, this.targetX - cell.x) : Math.random() * Math.PI * 2)
                     : Math.atan2(worldMouseY - cell.y, worldMouseX - cell.x);
 
-                const ejectDist = cell.radius * 0.1;
+                const ejectDist = 0.1;
                 const newX = cell.x + Math.cos(angle) * ejectDist;
                 const newY = cell.y + Math.sin(angle) * ejectDist;
-
                 const newCell = new Cell(newX, newY, massOfNewPiece, this.color, this.name, this.id, this.isBot);
 
                 const massBasedSpeedBonus = Math.min(Math.sqrt(massOfNewPiece) * 0.4, MAX_EJECT_SPEED_BONUS_FROM_MASS);
-                const ejectSpeed = (CELL_SPLIT_EJECT_SPEED_BASE + massBasedSpeedBonus) / BASE_EJECT_SPEED_FACTOR;
+                const newPieceEjectSpeed = (CELL_SPLIT_EJECT_SPEED_BASE + massBasedSpeedBonus) / BASE_EJECT_SPEED_FACTOR;
 
-                newCell.ejectionVx = Math.cos(angle) * ejectSpeed;
-                newCell.ejectionVy = Math.sin(angle) * ejectSpeed;
-                newCell.ejectionTimer = CELL_SPLIT_EJECT_DURATION;
+                newCell.ejectionVx = Math.cos(angle) * newPieceEjectSpeed;
+                newCell.ejectionVy = Math.sin(angle) * newPieceEjectSpeed;
+                newCell.ejectionTimer = CELL_SPLIT_EJECT_DURATION; // For its own ejection flight
 
-                cell.ejectionVx = 0;
-                cell.ejectionVy = 0;
-                cell.ejectionTimer = 0;
-
-                cell.mergeTimer = this.calculateMergeTime(cell.mass);
-                newCell.mergeTimer = this.calculateMergeTime(newCell.mass);
+                // Set up passthrough mechanism for this parent-child pair
+                cell.splitPartnerId = newCell.id;
+                cell.splitPassthroughEndTime = now + passthroughDuration;
+                newCell.splitPartnerId = cell.id;
+                newCell.splitPassthroughEndTime = now + passthroughDuration;
 
                 this.cells.push(newCell);
                 currentTotalCellCount++;
+                splitOccurred = true;
+            }
+            if (splitOccurred) {
+                this.globalMergeCooldown = this.calculateGlobalMergeCooldown(this.getTotalMass());
             }
         }
 
         initiateSpew() {
             if (this.getTotalMass() < MIN_SPEW_MASS_TOTAL) return;
             this.cells.forEach(cell => {
-                if (cell.mass > SPEWED_MASS_COST + PLAYER_START_MASS / 2 && cell.ejectionTimer <= 0) { // Only non-ejecting cells spew
-                    cell.mass -= SPEWED_MASS_COST; cell.updateRadiusAndTarget();
+                if (cell.mass > SPEWED_MASS_COST + PLAYER_START_MASS / 2 && cell.ejectionTimer <= 0) {
+                    cell.mass -= SPEWED_MASS_COST;
+                    cell.updateRadiusAndTarget();
+
                     const angle = this.isBot ?
                         (this.ai && (this.targetX !== undefined) ? Math.atan2(this.targetY - cell.y, this.targetX - cell.x) : Math.random() * Math.PI * 2)
                         : Math.atan2(worldMouseY - cell.y, worldMouseX - cell.x);
@@ -481,41 +559,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
         applyMassDecay() {
             this.cells.forEach(cell => cell.decayMass());
-            this.cells = this.cells.filter(cell => cell.mass >= MIN_MASS_PER_SPLIT_PIECE / 2); // Allow slightly smaller before removing
+            this.cells = this.cells.filter(cell => cell.mass >= MIN_MASS_PER_SPLIT_PIECE / 2);
         }
 
         handleVirusEatSplit(eatenCellOriginal) {
             let cellIndex = this.cells.findIndex(c => c.id === eatenCellOriginal.id);
             let cellToProcess = (cellIndex !== -1) ? this.cells[cellIndex] : null;
-
-            if (!cellToProcess || cellToProcess.mass <= 0) {
-                return;
-            }
+            if (!cellToProcess || cellToProcess.mass <= 0) return;
 
             const originalMass = cellToProcess.mass;
             const originalX = cellToProcess.x;
             const originalY = cellToProcess.y;
-
             this.cells.splice(cellIndex, 1);
-
             let newCells = [];
             const minPieceForVirusSplit = MIN_MASS_PER_SPLIT_PIECE;
-
             const MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS = 10;
             const BASE_EJECT_SPEED_FACTOR_VIRUS = 3.2;
             const VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER = 1.0;
 
             if (originalMass > 300 && (MAX_PLAYER_CELLS - this.cells.length) >= 3) {
                 let remainingMass = originalMass;
-
                 let mainBlobMass = Math.max(minPieceForVirusSplit, Math.floor(originalMass * 0.50));
                 if (remainingMass - mainBlobMass < minPieceForVirusSplit * 2) {
                     mainBlobMass = Math.max(minPieceForVirusSplit, remainingMass - (minPieceForVirusSplit * 2));
                 }
                 if (mainBlobMass < minPieceForVirusSplit) mainBlobMass = minPieceForVirusSplit;
-
                 const mainBlob = new Cell(originalX, originalY, mainBlobMass, this.color, this.name, this.id, this.isBot);
-                mainBlob.mergeTimer = this.calculateMergeTime(mainBlobMass);
                 mainBlob.ejectionTimer = 0;
                 newCells.push(mainBlob);
                 remainingMass -= mainBlobMass;
@@ -528,91 +597,70 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     if (secondPieceMass > remainingMass) secondPieceMass = remainingMass;
                     if (secondPieceMass < minPieceForVirusSplit && remainingMass >= minPieceForVirusSplit) secondPieceMass = minPieceForVirusSplit;
-
                     if (secondPieceMass >= minPieceForVirusSplit) {
                         const anglePiece2 = Math.random() * Math.PI * 2;
                         const ejectDistPiece2 = mainBlob.radius > 0 ? mainBlob.radius * 0.3 : 5;
                         const piece2X = originalX + Math.cos(anglePiece2) * ejectDistPiece2;
                         const piece2Y = originalY + Math.sin(anglePiece2) * ejectDistPiece2;
                         const piece2 = new Cell(piece2X, piece2Y, secondPieceMass, this.color, this.name, this.id, this.isBot);
-
                         const massBasedSpeedBonus2 = Math.min(Math.sqrt(secondPieceMass) * 0.35, MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS);
                         const ejectSpeed2 = (CELL_SPLIT_EJECT_SPEED_BASE * 0.9 + massBasedSpeedBonus2) / BASE_EJECT_SPEED_FACTOR_VIRUS;
-
                         piece2.ejectionVx = Math.cos(anglePiece2) * ejectSpeed2;
                         piece2.ejectionVy = Math.sin(anglePiece2) * ejectSpeed2;
                         piece2.ejectionTimer = CELL_SPLIT_EJECT_DURATION * VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER;
-                        piece2.mergeTimer = this.calculateMergeTime(secondPieceMass);
                         newCells.push(piece2);
                         remainingMass -= secondPieceMass;
                     }
                 }
-
                 let numTinyPieces = Math.floor(Math.random() * 6) + 5;
                 for (let i = 0; i < numTinyPieces; i++) {
                     if (remainingMass < minPieceForVirusSplit || (MAX_PLAYER_CELLS - (this.cells.length + newCells.length)) <= 0) break;
-
                     let tinyMass = Math.floor(Math.random() * 41) + 10;
                     tinyMass = Math.min(tinyMass, remainingMass);
                     if (tinyMass < minPieceForVirusSplit) {
-                        if (remainingMass >= minPieceForVirusSplit) tinyMass = minPieceForVirusSplit;
-                        else break;
+                        if (remainingMass >= minPieceForVirusSplit) tinyMass = minPieceForVirusSplit; else break;
                     }
-
                     const angleTiny = (i / numTinyPieces) * Math.PI * 2 + (Math.random() - 0.5) * 0.8;
                     const ejectDistTiny = (mainBlob.radius > 0 ? mainBlob.radius * 0.5 : 10) + Math.random() * 20;
                     const tinyX = originalX + Math.cos(angleTiny) * ejectDistTiny;
                     const tinyY = originalY + Math.sin(angleTiny) * ejectDistTiny;
                     const tinyPiece = new Cell(tinyX, tinyY, tinyMass, this.color, this.name, this.id, this.isBot);
-
                     const massBasedSpeedBonusTiny = Math.min(Math.sqrt(tinyMass) * 0.3, MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS);
                     const ejectSpeedTiny = (CELL_SPLIT_EJECT_SPEED_BASE * 1.1 + massBasedSpeedBonusTiny) / BASE_EJECT_SPEED_FACTOR_VIRUS;
-
                     tinyPiece.ejectionVx = Math.cos(angleTiny) * ejectSpeedTiny;
                     tinyPiece.ejectionVy = Math.sin(angleTiny) * ejectSpeedTiny;
                     tinyPiece.ejectionTimer = CELL_SPLIT_EJECT_DURATION * (VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER + 0.2);
-                    tinyPiece.mergeTimer = this.calculateMergeTime(tinyMass);
                     newCells.push(tinyPiece);
                     remainingMass -= tinyMass;
                 }
                 if (remainingMass > 0 && newCells.length > 0 && newCells[0].id === mainBlob.id) {
-                    newCells[0].mass += remainingMass;
-                    newCells[0].updateRadiusAndTarget();
+                    newCells[0].mass += remainingMass; newCells[0].updateRadiusAndTarget();
                 }
 
             } else if (originalMass >= VIRUS_SPLIT_MASS_LOW_MIN && originalMass <= VIRUS_SPLIT_MASS_LOW_MAX) {
                 let numPieces = Math.floor(originalMass / (minPieceForVirusSplit * 1.25));
                 numPieces = Math.min(numPieces, VIRUS_SPLIT_LOW_MAX_PIECES, MAX_PLAYER_CELLS - this.cells.length);
                 if (numPieces <= 1 && MAX_PLAYER_CELLS - this.cells.length >= 1) numPieces = 2;
-
                 const massPerPiece = (numPieces > 0) ? Math.floor(originalMass / numPieces) : 0;
-
                 if (numPieces <= 0 || massPerPiece < minPieceForVirusSplit) {
                     const reCell = new Cell(originalX, originalY, originalMass, this.color, this.name, this.id, this.isBot);
-                    reCell.mergeTimer = this.calculateMergeTime(reCell.mass); this.cells.push(reCell); return;
+                    this.cells.push(reCell); this.globalMergeCooldown = this.calculateGlobalMergeCooldown(this.getTotalMass()); return;
                 }
-
                 for (let i = 0; i < numPieces; i++) {
                     if (this.cells.length + newCells.length >= MAX_PLAYER_CELLS) break;
                     const angle = (i / numPieces) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
                     const ejectDist = minPieceForVirusSplit * 0.3;
-                    const nx = originalX + Math.cos(angle) * ejectDist;
-                    const ny = originalY + Math.sin(angle) * ejectDist;
+                    const nx = originalX + Math.cos(angle) * ejectDist; const ny = originalY + Math.sin(angle) * ejectDist;
                     const piece = new Cell(nx, ny, massPerPiece, this.color, this.name, this.id, this.isBot);
-
                     const massBasedSpeedBonus = Math.min(Math.sqrt(massPerPiece) * 0.3, MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS);
                     const ejectSpeed = (CELL_SPLIT_EJECT_SPEED_BASE + massBasedSpeedBonus) / BASE_EJECT_SPEED_FACTOR_VIRUS;
-
-                    piece.ejectionVx = Math.cos(angle) * ejectSpeed;
-                    piece.ejectionVy = Math.sin(angle) * ejectSpeed;
+                    piece.ejectionVx = Math.cos(angle) * ejectSpeed; piece.ejectionVy = Math.sin(angle) * ejectSpeed;
                     piece.ejectionTimer = CELL_SPLIT_EJECT_DURATION * VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER;
-                    piece.mergeTimer = this.calculateMergeTime(massPerPiece);
                     newCells.push(piece);
                 }
             } else if (originalMass > VIRUS_SPLIT_MASS_LOW_MAX && originalMass <= 300) {
                 let numSmallCells = Math.min(VIRUS_SPLIT_HIGH_MIN_PIECES, MAX_PLAYER_CELLS - this.cells.length - 1);
                 if (numSmallCells < 0) numSmallCells = 0;
-
                 let massForSmall = numSmallCells * minPieceForVirusSplit;
                 let mainBlobMassOld = originalMass - massForSmall;
 
@@ -621,11 +669,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (mainBlobMassOld < minPieceForVirusSplit) {
                     const reCell = new Cell(originalX, originalY, originalMass, this.color, this.name, this.id, this.isBot);
-                    reCell.mergeTimer = this.calculateMergeTime(reCell.mass); this.cells.push(reCell); return;
+                    this.cells.push(reCell); this.globalMergeCooldown = this.calculateGlobalMergeCooldown(this.getTotalMass()); return;
                 }
-
                 const mainBlobOld = new Cell(originalX, originalY, mainBlobMassOld, this.color, this.name, this.id, this.isBot);
-                mainBlobOld.mergeTimer = this.calculateMergeTime(mainBlobMassOld);
                 mainBlobOld.ejectionTimer = 0;
                 newCells.push(mainBlobOld);
 
@@ -633,26 +679,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (this.cells.length + newCells.length >= MAX_PLAYER_CELLS) break;
                     const angle = (i / numSmallCells) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
                     const ejectDist = mainBlobOld.radius > 0 ? mainBlobOld.radius * 0.6 : 5;
-                    const nx = originalX + Math.cos(angle) * ejectDist;
-                    const ny = originalY + Math.sin(angle) * ejectDist;
+                    const nx = originalX + Math.cos(angle) * ejectDist; const ny = originalY + Math.sin(angle) * ejectDist;
                     const piece = new Cell(nx, ny, minPieceForVirusSplit, this.color, this.name, this.id, this.isBot);
-
                     const massBasedSpeedBonus = Math.min(Math.sqrt(minPieceForVirusSplit) * 0.3, MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS);
                     const ejectSpeed = (CELL_SPLIT_EJECT_SPEED_BASE * 1.0 + massBasedSpeedBonus) / BASE_EJECT_SPEED_FACTOR_VIRUS;
-
                     piece.ejectionVx = Math.cos(angle) * ejectSpeed;
                     piece.ejectionVy = Math.sin(angle) * ejectSpeed;
                     piece.ejectionTimer = CELL_SPLIT_EJECT_DURATION * (VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER + 0.1);
-                    piece.mergeTimer = this.calculateMergeTime(minPieceForVirusSplit);
                     newCells.push(piece);
                 }
             } else {
                 const reCell = new Cell(originalX, originalY, originalMass, this.color, this.name, this.id, this.isBot);
-                reCell.mergeTimer = this.calculateMergeTime(reCell.mass);
                 this.cells.push(reCell);
+                this.globalMergeCooldown = this.calculateGlobalMergeCooldown(this.getTotalMass());
                 return;
             }
             this.cells.push(...newCells);
+            this.globalMergeCooldown = this.calculateGlobalMergeCooldown(this.getTotalMass());
         }
     }
 
@@ -665,24 +708,20 @@ document.addEventListener('DOMContentLoaded', () => {
             super(x, y, mass, VIRUS_COLOR);
             this.baseMass = VIRUS_MASS_DEFAULT;
             this.ejectionVx = 0; this.ejectionVy = 0; this.ejectionTimer = 0;
-            this.updateRadiusAndTarget();
-            this.radius = this.targetRadius;
+            this.updateRadiusAndTarget(); this.radius = this.targetRadius;
         }
-        updateRadiusAndTarget() { this.targetRadius = 4 + Math.sqrt(this.mass) * 4.5; } // Viruses are a bit denser visually
-
+        updateRadiusAndTarget() { this.targetRadius = 4 + Math.sqrt(this.mass) * 4.5; }
         draw(ctx) {
             const numOuterPoints = 12 + Math.floor(this.radius / 15);
             const outerR = this.radius;
-            const innerR = this.radius * (0.60 + Math.sin(Date.now() / 250) * 0.08); // Pulsating inner radius
-            const rotation = Date.now() / 2500; // Slow rotation
+            const innerR = this.radius * (0.60 + Math.sin(Date.now() / 250) * 0.08);
+            const rotation = Date.now() / 2500;
             ctx.beginPath();
             for (let i = 0; i < numOuterPoints; i++) {
                 let angleOuter = (i / numOuterPoints) * Math.PI * 2 + rotation;
-                let xOuter = this.x + Math.cos(angleOuter) * outerR;
-                let yOuter = this.y + Math.sin(angleOuter) * outerR;
+                let xOuter = this.x + Math.cos(angleOuter) * outerR; let yOuter = this.y + Math.sin(angleOuter) * outerR;
                 let angleInner = ((i + 0.5) / numOuterPoints) * Math.PI * 2 + rotation;
-                let xInner = this.x + Math.cos(angleInner) * innerR;
-                let yInner = this.y + Math.sin(angleInner) * innerR;
+                let xInner = this.x + Math.cos(angleInner) * innerR; let yInner = this.y + Math.sin(angleInner) * innerR;
                 if (i === 0) { ctx.moveTo(xOuter, yOuter); } else { ctx.lineTo(xOuter, yOuter); }
                 ctx.lineTo(xInner, yInner);
             }
@@ -692,24 +731,23 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.lineWidth = Math.max(1.5 / camera.zoom, this.radius / 30);
             ctx.stroke();
         }
-
         onFed(spewedItem) {
             this.mass += SPEWED_MASS_YIELD; this.updateRadiusAndTarget();
             if (this.mass > VIRUS_FED_LIMIT && viruses.length < MAX_VIRUS_COUNT) {
-                this.mass = this.baseMass; this.updateRadiusAndTarget(); // Reset mass
-                const angle = Math.atan2(spewedItem.y - this.y, spewedItem.x - this.x); // Angle from spewed mass to virus center
-                const shootAngle = angle + Math.PI; // Shoot new virus in opposite direction
+                this.mass = this.baseMass; this.updateRadiusAndTarget();
+                const angle = Math.atan2(spewedItem.y - this.y, spewedItem.x - this.x);
+                const shootAngle = angle + Math.PI;
                 const ejectDist = this.radius * 1.5;
                 const newVirusRadius = 4 + Math.sqrt(VIRUS_MASS_DEFAULT) * 4.5;
                 const spawnPos = findSafeSpawnPosition(newVirusRadius, "virus", {
-                    preferredX: this.x + Math.cos(shootAngle) * ejectDist * 2.5, // Further out preferred
+                    preferredX: this.x + Math.cos(shootAngle) * ejectDist * 2.5,
                     preferredY: this.y + Math.sin(shootAngle) * ejectDist * 2.5,
                 });
                 const newVirus = new Virus(spawnPos.x, spawnPos.y);
-                const virusEjectSpeed = SPEWED_MASS_SPEED * 1.1; // New virus ejects with some speed
+                const virusEjectSpeed = SPEWED_MASS_SPEED * 1.1;
                 newVirus.ejectionVx = Math.cos(shootAngle) * virusEjectSpeed;
                 newVirus.ejectionVy = Math.sin(shootAngle) * virusEjectSpeed;
-                newVirus.ejectionTimer = CELL_SPLIT_EJECT_DURATION * 0.8; // Shorter ejection for new virus
+                newVirus.ejectionTimer = CELL_SPLIT_EJECT_DURATION * 0.8;
                 viruses.push(newVirus);
             }
         }
@@ -718,10 +756,9 @@ document.addEventListener('DOMContentLoaded', () => {
     class SpewedMass extends Entity {
         constructor(x, y, color, ownerId, vx, vy) {
             super(x, y, SPEWED_MASS_YIELD, color);
-            this.radius = SPEWED_MASS_RADIUS; this.targetRadius = this.radius; // Static radius
+            this.radius = SPEWED_MASS_RADIUS; this.targetRadius = this.radius;
             this.ownerId = ownerId; this.createdAt = Date.now();
-            this.vx = vx; this.vy = vy;
-            this.lifeTimer = SPEWED_MASS_LIFESPAN;
+            this.vx = vx; this.vy = vy; this.lifeTimer = SPEWED_MASS_LIFESPAN;
         }
         update(dt, dtFrameFactor) {
             this.x += this.vx * dtFrameFactor; this.y += this.vy * dtFrameFactor;
@@ -732,35 +769,31 @@ document.addEventListener('DOMContentLoaded', () => {
             this.lifeTimer -= dt;
         }
     }
-
+    function newCellRadius(mass) {
+        return 4 + Math.sqrt(mass) * 4;
+    }
     function findSafeSpawnPosition(radius, entityType = "unknown", preferences = {}) {
         const MAX_TRIES = 30; let spawnX, spawnY;
         let bestSpawnX = preferences.preferredX || Math.random() * (MAP_WIDTH - radius * 2) + radius;
         let bestSpawnY = preferences.preferredY || Math.random() * (MAP_HEIGHT - radius * 2) + radius;
         let foundSafe = false;
-        // Consider all cells for safe spawning checks
         const allPlayerAndBotCells = [...(player && !isPlayerDead ? player.cells : []), ...bots.flatMap(b => b.cells)];
-
         for (let i = 0; i < MAX_TRIES; i++) {
-            if (i < 5 && preferences.preferredX !== undefined) { // Try near preferred location first
+            if (i < 5 && preferences.preferredX !== undefined) {
                 spawnX = preferences.preferredX + (Math.random() - 0.5) * radius * (i + 1) * 2;
                 spawnY = preferences.preferredY + (Math.random() - 0.5) * radius * (i + 1) * 2;
-            } else { // Random location
+            } else {
                 spawnX = Math.random() * (MAP_WIDTH - radius * 2) + radius;
                 spawnY = Math.random() * (MAP_HEIGHT - radius * 2) + radius;
             }
             spawnX = Math.max(radius, Math.min(spawnX, MAP_WIDTH - radius));
             spawnY = Math.max(radius, Math.min(spawnY, MAP_HEIGHT - radius));
-
             let isSafe = true;
-            // Check against player/bot cells
             for (const cell of allPlayerAndBotCells) {
                 const distSq = (spawnX - cell.x) ** 2 + (spawnY - cell.y) ** 2;
                 if (distSq < (radius + cell.radius + 10) ** 2) { isSafe = false; break; }
             }
             if (!isSafe) continue;
-
-            // Additional check for viruses if spawning a virus
             if (entityType === "virus") {
                 for (const v of viruses) {
                     const distSq = (spawnX - v.x) ** 2 + (spawnY - v.y) ** 2;
@@ -776,8 +809,7 @@ document.addEventListener('DOMContentLoaded', () => {
         uniqueIdCounter = 0; isPlayerDead = false; playerRespawnTimer = 0;
         const playerNameVal = playerNameInput.value || "Player";
         const numBotsVal = parseInt(numBotsInput.value) || 0;
-        currentGameBotAiType = botTypeSelect.value; // Get selected bot type
-
+        currentGameBotAiType = botTypeSelect.value;
         player = new PlayerController(getUniqueId(), playerNameVal, PLAYER_START_MASS, '#007bff');
         bots = [];
         for (let i = 0; i < numBotsVal; i++) {
@@ -799,15 +831,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function spawnFood() {
         if (food.length < MAX_FOOD_COUNT) {
-            const spawnPos = findSafeSpawnPosition(FOOD_RADIUS * 2, "food");
-            food.push(new Food(spawnPos.x, spawnPos.y));
+            const spawnPos = findSafeSpawnPosition(FOOD_RADIUS * 2, "food"); food.push(new Food(spawnPos.x, spawnPos.y));
         }
     }
     function spawnVirus() {
         if (viruses.length < MAX_VIRUS_COUNT) {
             const virusRadius = 4 + Math.sqrt(VIRUS_MASS_DEFAULT) * 4.5;
-            const spawnPos = findSafeSpawnPosition(virusRadius * 1.2, "virus");
-            viruses.push(new Virus(spawnPos.x, spawnPos.y));
+            const spawnPos = findSafeSpawnPosition(virusRadius * 1.2, "virus"); viruses.push(new Virus(spawnPos.x, spawnPos.y));
         }
     }
 
@@ -816,24 +846,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isPlayerDead || !player || player.cells.length === 0) {
             targetX = MAP_WIDTH / 2; targetY = MAP_HEIGHT / 2; targetMass = PLAYER_START_MASS;
         } else {
-            const com = player.getCenterOfMassCell();
-            targetX = com.x; targetY = com.y; targetMass = com.mass;
+            const com = player.getCenterOfMassCell(); targetX = com.x; targetY = com.y; targetMass = com.mass;
         }
         camera.x += (targetX - camera.x) * 0.1; camera.y += (targetY - camera.y) * 0.1;
-        const baseZoom = Math.max(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT) * 0.9; // Ensure map edges are roughly visible at min zoom
-        const massFactor = Math.max(0.1, 1.6 - Math.log10(targetMass + 1) * 0.35); // Zoom out with mass
-        const desiredZoom = Math.max(baseZoom * 0.3, massFactor); // Clamp zoom so it doesn't get too small or too large
-
+        const baseZoom = Math.max(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT) * 0.9;
+        const massFactor = Math.max(0.1, 1.6 - Math.log10(targetMass + 1) * 0.35);
+        const desiredZoom = Math.max(baseZoom * 0.3, massFactor);
         camera.zoom += (desiredZoom - camera.zoom) * 0.05;
-        camera.zoom = Math.max(0.05, Math.min(camera.zoom, 2.5)); // Absolute min/max zoom
+        camera.zoom = Math.max(0.05, Math.min(camera.zoom, 2.5));
     }
     function updateWorldMouseCoords() {
         worldMouseX = (screenMouseX - canvas.width / 2) / camera.zoom + camera.x;
         worldMouseY = (screenMouseY - canvas.height / 2) / camera.zoom + camera.y;
     }
+
     function checkCollisions() {
         const allControllers = [...(player && !isPlayerDead ? [player] : []), ...bots].filter(c => c && c.cells.length > 0);
-
         allControllers.forEach(controller => {
             for (let i = controller.cells.length - 1; i >= 0; i--) {
                 if (i >= controller.cells.length) continue;
@@ -841,85 +869,56 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!cell || cell.mass <= 0) continue;
 
                 for (let j = food.length - 1; j >= 0; j--) {
-                    const f = food[j];
-                    if (!f) continue;
+                    const f = food[j]; if (!f) continue;
                     if (isColliding(cell, f, "food")) {
                         cell.mass += f.mass;
                         cell.updateRadiusAndTarget();
                         food.splice(j, 1);
                     }
                 }
-
                 for (let j = spewedMasses.length - 1; j >= 0; j--) {
-                    const sm = spewedMasses[j];
-                    if (!sm) continue;
+                    const sm = spewedMasses[j]; if (!sm) continue;
                     if (isColliding(cell, sm, "spewed") && cell.mass > sm.mass * 1.1) {
                         cell.mass += sm.mass;
                         cell.updateRadiusAndTarget();
                         spewedMasses.splice(j, 1);
                     }
                 }
-
                 let virusEatenAndCellSplit = false;
                 for (let j = viruses.length - 1; j >= 0; j--) {
-                    const v = viruses[j];
-                    if (!v) continue;
-
-                    if (!controller.cells.includes(cell) || cell.mass <= 0) {
-                        virusEatenAndCellSplit = true;
-                        break;
-                    }
+                    const v = viruses[j]; if (!v) continue;
+                    if (!controller.cells.includes(cell) || cell.mass <= 0) { virusEatenAndCellSplit = true; break; }
 
                     if (isColliding(cell, v, "virus") && cell.mass >= v.mass * VIRUS_EAT_MASS_MULTIPLIER) {
-                        // Cell eats virus mass *before* splitting logic
-                        cell.mass += v.mass; // Cell gains virus mass
-                        cell.updateRadiusAndTarget(); // Update radius due to gained mass
-
-                        viruses.splice(j, 1); // Remove virus
-
-                        // Now call split logic, passing the cell that ate the virus
-                        // This cell already has the increased mass.
+                        cell.mass += v.mass;
+                        cell.updateRadiusAndTarget();
+                        viruses.splice(j, 1);
                         controller.handleVirusEatSplit(cell);
-
-                        virusEatenAndCellSplit = true;
-                        break;
+                        virusEatenAndCellSplit = true; break;
                     }
                 }
-                if (virusEatenAndCellSplit) {
-                    // Cell was processed by virus split, outer loop i-- will handle correctly
-                }
+                if (virusEatenAndCellSplit) continue;
             }
         });
-
         for (let i = spewedMasses.length - 1; i >= 0; i--) {
-            const sm = spewedMasses[i];
-            if (!sm) continue;
+            const sm = spewedMasses[i]; if (!sm) continue;
             for (let j = viruses.length - 1; j >= 0; j--) {
-                const v = viruses[j];
-                if (!v) continue;
-                if (isColliding(sm, v, "virus_feed")) {
-                    v.onFed(sm);
-                    spewedMasses.splice(i, 1);
-                    break;
-                }
+                const v = viruses[j]; if (!v) continue;
+                if (isColliding(sm, v, "virus_feed")) { v.onFed(sm); spewedMasses.splice(i, 1); break; }
             }
         }
-
         const allActivePlayerCellsSnapshot = [];
-        allControllers.forEach(c => {
-            c.cells.forEach(cell_in_controller => {
-                if (cell_in_controller && cell_in_controller.mass > 0) {
-                    allActivePlayerCellsSnapshot.push(cell_in_controller);
-                }
-            });
-        });
+        allControllers.forEach(c => { c.cells.forEach(cell_in_controller => { if (cell_in_controller && cell_in_controller.mass > 0) { allActivePlayerCellsSnapshot.push(cell_in_controller); } }); });
 
         for (let i = 0; i < allActivePlayerCellsSnapshot.length; i++) {
-            for (let j = i + 1; j < allActivePlayerCellsSnapshot.length; j++) {
-                const cellA = allActivePlayerCellsSnapshot[i];
-                const cellB = allActivePlayerCellsSnapshot[j];
+            const cellA = allActivePlayerCellsSnapshot[i];
+            if (!cellA || cellA.mass <= 0) continue;
 
-                if (!cellA || !cellB || cellA.mass <= 0 || cellB.mass <= 0 || cellA.ownerId === cellB.ownerId) continue;
+            for (let j = i + 1; j < allActivePlayerCellsSnapshot.length; j++) {
+                const cellB = allActivePlayerCellsSnapshot[j];
+                if (!cellB || cellB.mass <= 0) continue;
+
+                if (cellA.ownerId === cellB.ownerId) continue;
 
                 if (isColliding(cellA, cellB, "cell")) {
                     let eater, eatee;
@@ -928,41 +927,37 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (cellB.mass >= cellA.mass * EAT_MASS_RATIO && cellB.mass > cellA.mass + Math.max(1, MIN_MASS_PER_SPLIT_PIECE * 0.1)) {
                         eater = cellB; eatee = cellA;
                     }
-
                     if (eater) {
                         eater.mass += eatee.mass;
                         eatee.mass = 0;
                         eater.updateRadiusAndTarget();
 
                         const ownerOfEatee = allControllers.find(c => c.id === eatee.ownerId);
-                        if (ownerOfEatee) {
-                            ownerOfEatee.cells = ownerOfEatee.cells.filter(c => c.id !== eatee.id);
+                        if (ownerOfEatee) { ownerOfEatee.cells = ownerOfEatee.cells.filter(c => c.id !== eatee.id); }
+
+                        const eateeIndexInSnapshot = allActivePlayerCellsSnapshot.findIndex(c => c && c.id === eatee.id);
+                        if (eateeIndexInSnapshot !== -1) {
+                            allActivePlayerCellsSnapshot[eateeIndexInSnapshot] = null;
                         }
+                        if (eater === cellB) break;
                     }
                 }
             }
         }
-        allControllers.forEach(c => {
-            c.cells = c.cells.filter(cell => cell.mass > MIN_MASS_PER_SPLIT_PIECE / 2);
-        });
+        allControllers.forEach(c => { c.cells = c.cells.filter(cell => cell.mass > MIN_MASS_PER_SPLIT_PIECE / 2); });
     }
     function isColliding(obj1, obj2, type) {
         if (!obj1 || !obj2 || obj1.radius === undefined || obj2.radius === undefined) return false;
         const dx = obj1.x - obj2.x; const dy = obj1.y - obj2.y; const distSq = dx * dx + dy * dy;
         switch (type) {
-            case "food": return distSq < obj1.radius * obj1.radius * 0.8; // Cell needs to be mostly over food
-            case "spewed": return distSq < obj1.radius * obj1.radius * 0.8; // Same for spewed mass
-            case "virus": // Cell hits virus if its main body overlaps with virus's "core"
-                return distSq < (obj1.radius - obj2.radius * 0.2) ** 2;
-            case "virus_feed": // Spewed mass hits virus if it overlaps significantly
-                return distSq < (obj2.radius + obj1.radius * 0.5) ** 2;
-            case "cell": // Cell eating another cell
-                const larger = obj1.mass > obj2.mass ? obj1 : obj2;
-                const smaller = obj1.mass <= obj2.mass ? obj1 : obj2;
-                // Larger cell must substantially overlap smaller cell's center
+            case "food": return distSq < obj1.radius * obj1.radius * 0.8;
+            case "spewed": return distSq < obj1.radius * obj1.radius * 0.8;
+            case "virus": return distSq < (obj1.radius - obj2.radius * 0.2) ** 2;
+            case "virus_feed": return distSq < (obj2.radius + obj1.radius * 0.5) ** 2;
+            case "cell":
+                const larger = obj1.mass > obj2.mass ? obj1 : obj2; const smaller = obj1.mass <= obj2.mass ? obj1 : obj2;
                 return distSq < (larger.radius - smaller.radius * 0.33) ** 2;
-            default: // Generic fallback, not really used with current types
-                return distSq < (obj1.radius + obj2.radius) ** 2 * 0.25;
+            default: return distSq < (obj1.radius + obj2.radius) ** 2 * 0.25;
         }
     }
     function updateHUD() {
@@ -971,44 +966,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const playerState = (isPlayerDead || player.cells.length === 0);
         playerMassDisplay.textContent = playerState ? "0 (Respawning...)" : Math.floor(player.getTotalMass());
         playerCellCountDisplay.textContent = playerState ? "0" : player.cells.length;
+
+        if (playerGlobalMergeCooldownDisplay) {
+            if (!isPlayerDead && player.cells.length > 1) {
+                if (player.globalMergeCooldown > 0) {
+                    playerGlobalMergeCooldownDisplay.textContent = `Merge CD: ${(player.globalMergeCooldown / 1000).toFixed(1)}s`;
+                    playerGlobalMergeCooldownDisplay.style.display = 'block';
+                } else {
+                    playerGlobalMergeCooldownDisplay.textContent = 'Merge Ready!';
+                    playerGlobalMergeCooldownDisplay.style.display = 'block';
+                }
+            } else {
+                playerGlobalMergeCooldownDisplay.style.display = 'none';
+            }
+        }
+
         const now = Date.now();
-        if (now - lastLeaderboardUpdateTime > 1000) { // Update leaderboard every second
+        if (now - lastLeaderboardUpdateTime > 1000) {
             lastLeaderboardUpdateTime = now;
             const leaderSource = [...(player && !isPlayerDead ? [player] : []), ...bots];
             const allPlayersForLeaderboard = leaderSource
-                .filter(p => p && p.cells.length > 0 && p.getTotalMass() > 0) // Ensure they have mass
+                .filter(p => p && p.cells.length > 0 && p.getTotalMass() > 0)
                 .map(p => ({ name: p.name, mass: Math.floor(p.getTotalMass()), id: p.id }))
-                .sort((a, b) => b.mass - a.mass)
-                .slice(0, 10);
+                .sort((a, b) => b.mass - a.mass).slice(0, 10);
             leaderboardList.innerHTML = '';
             allPlayersForLeaderboard.forEach(p => {
-                const li = document.createElement('li');
-                li.textContent = `${p.name}: ${p.mass}`;
-                if (player && p.id === player.id && !isPlayerDead) {
-                    li.style.fontWeight = 'bold';
-                    li.style.color = player.color;
-                }
+                const li = document.createElement('li'); li.textContent = `${p.name}: ${p.mass}`;
+                if (player && p.id === player.id && !isPlayerDead) { li.style.fontWeight = 'bold'; li.style.color = player.color; }
                 leaderboardList.appendChild(li);
             });
         }
     }
     function drawGridAndBorders() {
         ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.scale(camera.zoom, camera.zoom);
-        ctx.translate(-camera.x, -camera.y);
-
-        const viewLeft = camera.x - (canvas.width / 2) / camera.zoom;
-        const viewTop = camera.y - (canvas.height / 2) / camera.zoom;
-        const viewRight = camera.x + (canvas.width / 2) / camera.zoom;
-        const viewBottom = camera.y + (canvas.height / 2) / camera.zoom;
-
+        ctx.translate(canvas.width / 2, canvas.height / 2); ctx.scale(camera.zoom, camera.zoom); ctx.translate(-camera.x, -camera.y);
+        const viewLeft = camera.x - (canvas.width / 2) / camera.zoom; const viewTop = camera.y - (canvas.height / 2) / camera.zoom;
+        const viewRight = camera.x + (canvas.width / 2) / camera.zoom; const viewBottom = camera.y + (canvas.height / 2) / camera.zoom;
         ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1 / camera.zoom;
-        const startGridX = Math.floor(viewLeft / GRID_SIZE) * GRID_SIZE;
-        const endGridX = Math.ceil(viewRight / GRID_SIZE) * GRID_SIZE;
-        const startGridY = Math.floor(viewTop / GRID_SIZE) * GRID_SIZE;
-        const endGridY = Math.ceil(viewBottom / GRID_SIZE) * GRID_SIZE;
-
+        const startGridX = Math.floor(viewLeft / GRID_SIZE) * GRID_SIZE; const endGridX = Math.ceil(viewRight / GRID_SIZE) * GRID_SIZE;
+        const startGridY = Math.floor(viewTop / GRID_SIZE) * GRID_SIZE; const endGridY = Math.ceil(viewBottom / GRID_SIZE) * GRID_SIZE;
         for (let x = startGridX; x < endGridX; x += GRID_SIZE) {
             if (x < 0 || x > MAP_WIDTH) continue;
             ctx.beginPath(); ctx.moveTo(x, Math.max(0, viewTop)); ctx.lineTo(x, Math.min(MAP_HEIGHT, viewBottom)); ctx.stroke();
@@ -1017,89 +1013,61 @@ document.addEventListener('DOMContentLoaded', () => {
             if (y < 0 || y > MAP_HEIGHT) continue;
             ctx.beginPath(); ctx.moveTo(Math.max(0, viewLeft), y); ctx.lineTo(Math.min(MAP_WIDTH, viewRight), y); ctx.stroke();
         }
-
-        ctx.strokeStyle = '#333'; ctx.lineWidth = Math.max(2, 10 / camera.zoom);
-        ctx.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+        ctx.strokeStyle = '#333'; ctx.lineWidth = Math.max(2, 10 / camera.zoom); ctx.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
         ctx.restore();
     }
 
     function gameLoop(timestamp) {
-        const dt = Math.min(50, timestamp - lastFrameTime); // Cap delta time to prevent large jumps
-        const dtFrameFactor = dt / (1000 / 60); // Factor for 60 FPS baseline
+        const dt = Math.min(50, timestamp - lastFrameTime);
+        const dtFrameFactor = dt / (1000 / 60);
         lastFrameTime = timestamp;
-
         updateWorldMouseCoords();
-
         const now = Date.now();
         if (now - lastDecayTime > MASS_DECAY_INTERVAL) {
             if (player && !isPlayerDead) player.applyMassDecay();
-            bots.forEach(bot => bot.applyMassDecay());
-            lastDecayTime = now;
+            bots.forEach(bot => bot.applyMassDecay()); lastDecayTime = now;
         }
         if (now - lastFoodSpawnTime > FOOD_SPAWN_INTERVAL) { spawnFood(); lastFoodSpawnTime = now; }
         if (now - lastVirusSpawnTime > VIRUS_SPAWN_INTERVAL) { spawnVirus(); lastVirusSpawnTime = now; }
-
         for (let i = spewedMasses.length - 1; i >= 0; i--) {
             spewedMasses[i].update(dt, dtFrameFactor);
             if (spewedMasses[i].lifeTimer <= 0) spewedMasses.splice(i, 1);
         }
         viruses.forEach(v => {
             v.animateRadiusLogic(dtFrameFactor);
-            if (v.ejectionTimer > 0) { // Viruses can also eject (when shot from another virus)
-                v.x += v.ejectionVx * dtFrameFactor; v.y += v.ejectionVy * dtFrameFactor;
-                v.ejectionTimer -= dt;
-                v.ejectionVx *= CELL_EJECTION_DAMPING; v.ejectionVy *= CELL_EJECTION_DAMPING; // Use same damping as cells
-                v.x = Math.max(v.radius, Math.min(v.x, MAP_WIDTH - v.radius));
-                v.y = Math.max(v.radius, Math.min(v.y, MAP_HEIGHT - v.radius));
+            if (v.ejectionTimer > 0) {
+                v.x += v.ejectionVx * dtFrameFactor; v.y += v.ejectionVy * dtFrameFactor; v.ejectionTimer -= dt;
+                v.ejectionVx *= CELL_EJECTION_DAMPING; v.ejectionVy *= CELL_EJECTION_DAMPING;
+                v.x = Math.max(v.radius, Math.min(v.x, MAP_WIDTH - v.radius)); v.y = Math.max(v.radius, Math.min(v.y, MAP_HEIGHT - v.radius));
                 if (v.ejectionTimer <= 0 || (Math.abs(v.ejectionVx) < 0.1 && Math.abs(v.ejectionVy) < 0.1)) {
                     v.ejectionTimer = 0; v.ejectionVx = 0; v.ejectionVy = 0;
                 }
             }
         });
-
         if (player && !isPlayerDead) {
             player.update(dt, dtFrameFactor);
-            if (player.cells.length === 0 && player.getTotalMass() === 0) { // Player truly dead
-                isPlayerDead = true;
-                playerRespawnTimer = PLAYER_RESPAWN_DELAY;
-                gameOverMessage.querySelector('h2').textContent = "You were eaten!";
-                gameOverMessage.style.display = 'block'; // Show game over immediately
+            if (player.cells.length === 0 && player.getTotalMass() === 0) {
+                isPlayerDead = true; playerRespawnTimer = PLAYER_RESPAWN_DELAY;
+                gameOverMessage.querySelector('h2').textContent = "You were eaten!"; gameOverMessage.style.display = 'block';
             }
         } else if (isPlayerDead) {
             playerRespawnTimer -= dt;
-            if (playerRespawnTimer <= 0) {
-                // Don't auto-respawn here. Player clicks "Play Again"
-                // gameOverMessage.style.display = 'block'; // Ensure it's visible
-            }
         }
         bots.forEach(bot => bot.update(dt, dtFrameFactor));
-        for (let i = bots.length - 1; i >= 0; i--) { // Respawn dead bots
+        for (let i = bots.length - 1; i >= 0; i--) {
             if (bots[i].cells.length === 0 && bots[i].getTotalMass() === 0) {
                 const deadBot = bots[i];
-                bots[i] = new PlayerController(deadBot.id, deadBot.name, BOT_START_MASS, getRandomBotColor(), true, currentGameBotAiType); // Use stored AI type
+                bots[i] = new PlayerController(deadBot.id, deadBot.name, BOT_START_MASS, getRandomBotColor(), true, currentGameBotAiType);
             }
         }
-
-        checkCollisions();
-        updateCamera();
-        updateHUD();
-
+        checkCollisions(); updateCamera(); updateHUD();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawGridAndBorders();
-
         ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.scale(camera.zoom, camera.zoom);
-        ctx.translate(-camera.x, -camera.y);
-
-        const renderables = [
-            ...food, ...spewedMasses, ...viruses,
-            ...(player && !isPlayerDead ? player.cells : []),
-            ...bots.flatMap(b => b.cells)
-        ];
-        renderables.sort((a, b) => a.mass - b.mass); // Draw smaller entities first
+        ctx.translate(canvas.width / 2, canvas.height / 2); ctx.scale(camera.zoom, camera.zoom); ctx.translate(-camera.x, -camera.y);
+        const renderables = [...food, ...spewedMasses, ...viruses, ...(player && !isPlayerDead ? player.cells : []), ...bots.flatMap(b => b.cells)];
+        renderables.sort((a, b) => a.mass - b.mass);
         renderables.forEach(e => e.draw(ctx));
-
         ctx.restore();
         gameLoopId = requestAnimationFrame(gameLoop);
     }
@@ -1108,19 +1076,14 @@ document.addEventListener('DOMContentLoaded', () => {
     startGameButton.addEventListener('click', initGame);
     restartGameButton.addEventListener('click', () => {
         if (gameLoopId) cancelAnimationFrame(gameLoopId);
-        gameOverMessage.style.display = 'none';
-        startScreen.style.display = 'block';
-        gameContainer.style.display = 'none';
+        gameOverMessage.style.display = 'none'; startScreen.style.display = 'block'; gameContainer.style.display = 'none';
     });
-    canvas.addEventListener('mousemove', (e) => {
-        screenMouseX = e.clientX; screenMouseY = e.clientY;
-    });
+    canvas.addEventListener('mousemove', (e) => { screenMouseX = e.clientX; screenMouseY = e.clientY; });
     window.addEventListener('keydown', (e) => {
         if (!player || isPlayerDead || player.cells.length === 0) return;
         if (e.key === 'w' || e.key === 'W') player.initiateSpew();
         if (e.code === 'Space') { e.preventDefault(); player.initiateSplit(); }
     });
-
     function getRandomPastelColor() { return `hsl(${Math.random() * 360},${25 + Math.random() * 70}%,${75 + Math.random() * 10}%)`; }
     function getRandomBotColor() { const c = ['#ff5733', '#33ff57', '#3357ff', '#ff33a1', '#a133ff', '#ffff33', '#ff9033', '#33ffC7', '#f075e6', '#75f0dd']; return c[Math.floor(Math.random() * c.length)]; }
     function darkenColor(color, percent) {
@@ -1132,17 +1095,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const rHex = R.toString(16).padStart(2, '0'); const gHex = G.toString(16).padStart(2, '0'); const bHex = B.toString(16).padStart(2, '0');
                 return `#${rHex}${gHex}${bHex}`;
             } else if (color.startsWith('rgb')) {
-                let parts = color.match(/\d+/g).map(Number); let amt = Math.round(2.55 * percent * (255 / 100)); // More accurate darkening for RGB
-                parts[0] = Math.max(0, Math.min(255, parts[0] - amt));
-                parts[1] = Math.max(0, Math.min(255, parts[1] - amt));
-                parts[2] = Math.max(0, Math.min(255, parts[2] - amt));
+                let parts = color.match(/\d+/g).map(Number); let amt = Math.round(2.55 * percent * (255 / 100));
+                parts[0] = Math.max(0, Math.min(255, parts[0] - amt)); parts[1] = Math.max(0, Math.min(255, parts[1] - amt)); parts[2] = Math.max(0, Math.min(255, parts[2] - amt));
                 return `rgb(${parts[0]},${parts[1]},${parts[2]})`;
-            } else if (color.startsWith('hsl')) { // HSL darkening is simpler, just reduce lightness
+            } else if (color.startsWith('hsl')) {
                 let parts = color.match(/(\d+(\.\d+)?)/g).map(Number);
                 parts[2] = Math.max(0, Math.min(100, parts[2] - percent));
                 return `hsl(${parts[0]},${parts[1]}%,${parts[2]}%)`;
             }
-        } catch (error) { /* console.error("Failed to darken color:", color, error); */ return color; }
-        return color; // Fallback
+        } catch (error) { return color; }
+        return color;
     }
 });
