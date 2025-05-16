@@ -4,13 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cirl.io</title>
+    <title>Agar.io Clone</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
     <div id="start-screen">
-        <h1>Cirl.io</h1>
+        <h1>Agar.io Clone</h1>
         <div>
             <label for="playerNameInput">Player Name:</label>
             <input type="text" id="playerNameInput" value="Player" maxlength="15">
@@ -19,7 +19,6 @@
             <label for="numBotsInput">Number of Bots (0-20):</label>
             <input type="number" id="numBotsInput" value="5" min="0" max="20">
         </div>
-        <!-- NEW BOT TYPE SELECTOR -->
         <div>
             <label for="botTypeSelect">Bot Type:</label>
             <select id="botTypeSelect">
@@ -51,7 +50,10 @@
                 </li>
                 <li>Spew Mass (W): Costs 20 mass (min 50 total mass to use). Creates food worth 18 mass for others. All
                     your cells spew.</li>
-                <li>Split (Space): Splits each of your cells in two (if massive enough). Max 32 cells.</li>
+                <li>Split (Space): Splits each of your cells in two (if massive enough). Max 32 cells. Triggers merge
+                    cooldown.</li>
+                <li>Merge Cooldown: After splitting or eating a virus, you have a global cooldown before your cells can
+                    merge again.</li>
             </ul>
         </div>
     </div>
@@ -62,6 +64,7 @@
             <div>Player: <span id="playerNameDisplay">-</span></div>
             <div>Mass: <span id="playerMassDisplay">0</span></div>
             <div>Cells: <span id="playerCellCountDisplay">0</span></div>
+            <div><span id="playerGlobalMergeCooldownDisplay" style="display:none;">-</span></div>
             <div id="leaderboard">
                 <h3>Leaderboard</h3>
                 <ol id="leaderboardList"></ol>
