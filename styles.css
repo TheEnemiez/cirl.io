@@ -1,0 +1,186 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f0f0f0;
+    overflow: hidden;
+}
+
+#start-screen {
+    text-align: center;
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    z-index: 200;
+    /* Ensure start screen is on top if game is somehow visible */
+    position: relative;
+    /* For stacking context if needed */
+}
+
+#start-screen h1 {
+    margin-bottom: 20px;
+}
+
+#start-screen div {
+    margin-bottom: 10px;
+}
+
+#start-screen label {
+    margin-right: 10px;
+}
+
+#start-screen input {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+#start-screen button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+#start-screen button:hover {
+    background-color: #0056b3;
+}
+
+#instructions {
+    margin-top: 20px;
+    text-align: left;
+    font-size: 0.9em;
+    color: #333;
+}
+
+#instructions ul {
+    padding-left: 20px;
+}
+
+
+#game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+}
+
+#gameCanvas {
+    display: block;
+    background-color: #e0e0e0;
+    width: 100%;
+    height: 100%;
+}
+
+#hud {
+    /* For player's own stats */
+    position: absolute;
+    bottom: 10px;
+    /* Moved to bottom left */
+    left: 10px;
+    color: #333;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 16px;
+    z-index: 100;
+}
+
+#hud div {
+    margin-bottom: 5px;
+}
+
+#leaderboard {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    /* Explicitly top-right */
+    width: 200px;
+    /* Fixed width */
+    max-height: calc(100vh - 20px - 50px);
+    /* Max height minus top/bottom padding and some buffer for player HUD */
+    overflow-y: auto;
+    /* Allow vertical scroll if many players */
+    background-color: rgba(220, 220, 220, 0.85);
+    /* Slightly more opaque */
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+}
+
+#leaderboard h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    text-align: center;
+    font-size: 1.1em;
+    color: #333;
+}
+
+#leaderboardList {
+    list-style-type: decimal;
+    padding-left: 20px;
+    /* Indent for numbers */
+    margin: 0;
+}
+
+#leaderboardList li {
+    font-size: 14px;
+    padding: 2px 0;
+    white-space: nowrap;
+    /* Prevent line breaks within one list item */
+    overflow: hidden;
+    /* Hide the part of the text that overflows */
+    text-overflow: ellipsis;
+    /* Add "..." at the end of clipped text */
+    max-width: 100%;
+    /* Ensure li doesn't try to be wider than its container due to nowrap */
+    color: #111;
+}
+
+#leaderboardList li:nth-child(odd) {
+    background-color: rgba(255, 255, 255, 0.2);
+    /* Subtle striping */
+}
+
+
+#gameOverMessage {
+    /* Now used for "New Game / Settings" button basically */
+    position: absolute;
+    top: 10px;
+    /* Positioned differently if used only for a restart button */
+    left: 10px;
+    /* top: 50%; left: 50%; transform: translate(-50%, -50%); */
+    background-color: rgba(0, 0, 0, 0.75);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    text-align: center;
+    z-index: 100;
+}
+
+#gameOverMessage h2 {
+    margin-bottom: 10px;
+    font-size: 1.2em;
+}
+
+#gameOverMessage button {
+    padding: 8px 15px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+#gameOverMessage button:hover {
+    background-color: #1e7e34;
+}
