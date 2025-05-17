@@ -5,9 +5,11 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
+    /* Use min-height for scrollability */
     background-color: #f0f0f0;
-    overflow: hidden;
+    overflow-x: hidden;
+    /* Prevent horizontal scroll on body */
 }
 
 #start-screen {
@@ -17,27 +19,38 @@ body {
     border-radius: 8px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     z-index: 200;
-    /* Ensure start screen is on top if game is somehow visible */
     position: relative;
-    /* For stacking context if needed */
+    margin: 20px;
+    /* Add margin for smaller screens */
+    max-width: 90vw;
+    /* prevent it from being too wide */
 }
 
 #start-screen h1 {
     margin-bottom: 20px;
 }
 
-#start-screen div {
+#start-screen div:not(#customSettingsPanel):not(.settings-grid):not(#instructions) {
     margin-bottom: 10px;
 }
 
+
 #start-screen label {
     margin-right: 10px;
+    display: inline-block;
+    /* Better alignment */
+    min-width: 150px;
+    /* Align labels */
+    text-align: right;
 }
 
-#start-screen input {
+#start-screen input[type="text"],
+#start-screen input[type="number"],
+#start-screen select {
     padding: 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
+    box-sizing: border-box;
 }
 
 #start-screen button {
@@ -48,6 +61,8 @@ body {
     border-radius: 4px;
     cursor: pointer;
     font-size: 16px;
+    margin-top: 15px;
+    /* Space above button */
 }
 
 #start-screen button:hover {
@@ -59,10 +74,65 @@ body {
     text-align: left;
     font-size: 0.9em;
     color: #333;
+    border-top: 1px solid #eee;
+    padding-top: 15px;
 }
 
 #instructions ul {
     padding-left: 20px;
+}
+
+/* Custom Settings Panel */
+#customSettingsPanel {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+#customSettingsPanel h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    text-align: center;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    /* Responsive grid */
+    gap: 10px;
+}
+
+.settings-grid div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.settings-grid label {
+    font-size: 0.9em;
+    margin-bottom: 3px;
+    min-width: unset;
+    text-align: left;
+}
+
+.settings-grid input[type="number"],
+.settings-grid input[type="checkbox"] {
+    width: 100%;
+    padding: 6px;
+    box-sizing: border-box;
+}
+
+.settings-grid input[type="checkbox"] {
+    width: auto;
+    margin-top: 5px;
+}
+
+
+.hidden {
+    display: none !important;
 }
 
 
@@ -70,6 +140,7 @@ body {
     position: relative;
     width: 100vw;
     height: 100vh;
+    overflow: hidden;
 }
 
 #gameCanvas {
@@ -80,10 +151,8 @@ body {
 }
 
 #hud {
-    /* For player's own stats */
     position: absolute;
-    bottom: 10px;
-    /* Moved to bottom left */
+    top: 10px;
     left: 10px;
     color: #333;
     background-color: rgba(255, 255, 255, 0.8);
@@ -101,15 +170,10 @@ body {
     position: absolute;
     top: 10px;
     right: 10px;
-    /* Explicitly top-right */
     width: 200px;
-    /* Fixed width */
-    max-height: calc(100vh - 20px - 50px);
-    /* Max height minus top/bottom padding and some buffer for player HUD */
+    max-height: calc(100vh - 20px);
     overflow-y: auto;
-    /* Allow vertical scroll if many players */
     background-color: rgba(220, 220, 220, 0.85);
-    /* Slightly more opaque */
     padding: 10px;
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
@@ -127,7 +191,6 @@ body {
 #leaderboardList {
     list-style-type: decimal;
     padding-left: 20px;
-    /* Indent for numbers */
     margin: 0;
 }
 
@@ -135,52 +198,129 @@ body {
     font-size: 14px;
     padding: 2px 0;
     white-space: nowrap;
-    /* Prevent line breaks within one list item */
     overflow: hidden;
-    /* Hide the part of the text that overflows */
     text-overflow: ellipsis;
-    /* Add "..." at the end of clipped text */
     max-width: 100%;
-    /* Ensure li doesn't try to be wider than its container due to nowrap */
     color: #111;
 }
 
 #leaderboardList li:nth-child(odd) {
     background-color: rgba(255, 255, 255, 0.2);
-    /* Subtle striping */
 }
 
 
 #gameOverMessage {
-    /* Now used for "New Game / Settings" button basically */
     position: absolute;
-    top: 10px;
-    /* Positioned differently if used only for a restart button */
-    left: 10px;
-    /* top: 50%; left: 50%; transform: translate(-50%, -50%); */
-    background-color: rgba(0, 0, 0, 0.75);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.85);
     color: white;
-    padding: 10px;
-    border-radius: 5px;
+    padding: 20px 30px;
+    border-radius: 8px;
     text-align: center;
-    z-index: 100;
+    z-index: 150;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
 #gameOverMessage h2 {
+    margin-top: 0;
     margin-bottom: 10px;
-    font-size: 1.2em;
+    /* Adjusted */
+    font-size: 1.5em;
+}
+
+#gameOverMessage p {
+    margin-bottom: 15px;
+    font-size: 1.1em;
 }
 
 #gameOverMessage button {
-    padding: 8px 15px;
-    background-color: #28a745;
+    padding: 10px 15px;
+    /* Adjusted */
+    background-color: #007bff;
+    /* Default blue */
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 1em;
+    transition: background-color 0.2s ease;
+    margin: 5px;
+}
+
+#gameOverMessage button#restartGameButton {
+    /* Specific style for back to menu */
+    background-color: #dc3545;
+    /* Red */
+}
+
+#gameOverMessage button#restartGameButton:hover {
+    background-color: #c82333;
+}
+
+#gameOverMessage button#spectateButton {
+    background-color: #ffc107;
+    /* Yellow */
+    color: #212529;
+}
+
+#gameOverMessage button#spectateButton:hover {
+    background-color: #e0a800;
+}
+
+#gameOverMessage button#respawnNowButton {
+    background-color: #28a745;
+    /* Green */
+}
+
+#gameOverMessage button#respawnNowButton:hover {
+    background-color: #1e7e34;
 }
 
 #gameOverMessage button:hover {
-    background-color: #1e7e34;
+    background-color: #0056b3;
+    /* Default hover */
+}
+
+#spectateControls {
+    position: absolute;
+    bottom: 20px;
+    /* Adjusted position */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.75);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    z-index: 110;
+    /* Above HUD/Leaderboard but below Game Over message */
+    font-size: 0.9em;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    opacity: 0.3;
+    /* Start faded out */
+    transition: opacity 0.3s ease-in-out;
+}
+
+#spectateControls:hover {
+    opacity: 1;
+    /* Fade in on hover */
+}
+
+#spectateControls button {
+    margin: 0 5px;
+    padding: 5px 10px;
+    background-color: #6c757d;
+    border: none;
+    color: white;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#spectateControls button:hover {
+    background-color: #545b62;
+}
+
+#spectateControls #spectatingInfo {
+    margin-right: 10px;
 }

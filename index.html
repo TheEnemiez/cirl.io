@@ -27,33 +27,164 @@
                 <option value="aggressive" selected>Aggressive</option>
             </select>
         </div>
+        <div>
+            <label for="gameModeSelect">Game Mode:</label>
+            <select id="gameModeSelect">
+                <option value="classic" selected>Classic</option>
+                <option value="fastFood">Fast Food</option>
+                <option value="virusMayhem">Virus Mayhem</option>
+                <option value="chaos">Chaos Mode</option>
+                <option value="custom">Custom</option>
+            </select>
+        </div>
+        <div>
+            <label for="startAsSpectatorCheckbox" style="min-width: 150px; text-align: right; margin-right: 10px;">Start
+                as Spectator:</label>
+            <input type="checkbox" id="startAsSpectatorCheckbox" style="width:auto;">
+        </div>
+
+        <div id="customSettingsPanel" class="hidden">
+            <h2>Custom Game Settings</h2>
+            <div class="settings-grid">
+                <div>
+                    <label for="csMapSize">Map Size (500-10000):</label>
+                    <input type="number" id="csMapSize" min="500" max="10000" step="100">
+                </div>
+                <div>
+                    <label for="csPlayerStartMass">Player Start Mass (10-500):</label>
+                    <input type="number" id="csPlayerStartMass" min="10" max="500" step="10">
+                </div>
+                <div>
+                    <label for="csBotStartMass">Bot Start Mass (5-200):</label>
+                    <input type="number" id="csBotStartMass" min="5" max="200" step="5">
+                </div>
+                <div>
+                    <label for="csMaxPlayerCells">Max Player Cells (1-256):</label>
+                    <input type="number" id="csMaxPlayerCells" min="1" max="256" step="1">
+                </div>
+                <div>
+                    <label for="csEatMassRatio">Eat Ratio (Players, 1.05-2):</label>
+                    <input type="number" id="csEatMassRatio" min="1.05" max="2" step="0.01">
+                </div>
+                <div>
+                    <label for="csMassDecayRate">Mass Decay Rate (0-0.1):</label>
+                    <input type="number" id="csMassDecayRate" min="0" max="0.1" step="0.001">
+                </div>
+                <div>
+                    <label for="csCellMinMassToSplitFrom">Min Mass to Split Cell (20-100):</label>
+                    <input type="number" id="csCellMinMassToSplitFrom" min="20" max="100" step="1">
+                </div>
+                <div>
+                    <label for="csMinMassPerSplitPiece">Min Mass per Split Piece (5-50):</label>
+                    <input type="number" id="csMinMassPerSplitPiece" min="5" max="50" step="1">
+                </div>
+                <div>
+                    <label for="csMaxFoodCount">Max Food Count (50-1000):</label>
+                    <input type="number" id="csMaxFoodCount" min="50" max="1000" step="10">
+                </div>
+                <div>
+                    <label for="csFoodMassMin">Food Mass Min (1-10):</label>
+                    <input type="number" id="csFoodMassMin" min="1" max="10" step="1">
+                </div>
+                <div>
+                    <label for="csFoodMassMax">Food Mass Max (Min-20):</label>
+                    <input type="number" id="csFoodMassMax" min="1" max="20" step="1">
+                </div>
+                <div>
+                    <label for="csFoodSpawnInterval">Food Spawn Interval (ms, 50-1000):</label>
+                    <input type="number" id="csFoodSpawnInterval" min="50" max="1000" step="10">
+                </div>
+                <div>
+                    <label for="csMaxVirusCount">Max Virus Count (0-100):</label>
+                    <input type="number" id="csMaxVirusCount" min="0" max="100" step="1">
+                </div>
+                <div>
+                    <label for="csVirusMassMin">Virus Mass Min (20-200):</label>
+                    <input type="number" id="csVirusMassMin" min="20" max="200" step="5">
+                </div>
+                <div>
+                    <label for="csVirusMassMax">Virus Mass Max (Min-300):</label>
+                    <input type="number" id="csVirusMassMax" min="20" max="300" step="5">
+                </div>
+                <div>
+                    <label for="csVirusFedLimit">Virus Fed Limit to Shoot (VirusMaxMass+10 to 500):</label>
+                    <input type="number" id="csVirusFedLimit" min="30" max="500" step="5">
+                </div>
+                <div>
+                    <label for="csVirusEatMassMultiplier">Virus Eat Multiplier (Player, 1.05-2):</label>
+                    <input type="number" id="csVirusEatMassMultiplier" min="1.05" max="2" step="0.01">
+                </div>
+                <div>
+                    <label for="csPlayerSplitsOnVirusEat">Player Splits on Virus Eat:</label>
+                    <input type="checkbox" id="csPlayerSplitsOnVirusEat">
+                </div>
+                <div>
+                    <label for="csVirusSpawnInterval">Virus Spawn Interval (ms, 500-10000):</label>
+                    <input type="number" id="csVirusSpawnInterval" min="500" max="10000" step="100">
+                </div>
+                <div>
+                    <label for="csSpewedMassYield">Spewed Mass Yield (1-50):</label>
+                    <input type="number" id="csSpewedMassYield" min="1" max="50" step="1">
+                </div>
+                <div>
+                    <label for="csSpewedMassCost">Spewed Mass Cost (0-100):</label>
+                    <input type="number" id="csSpewedMassCost" min="0" max="100" step="1">
+                </div>
+                <div>
+                    <label for="csMinSpewMassTotal">Min Total Mass to Spew (20-200):</label>
+                    <input type="number" id="csMinSpewMassTotal" min="20" max="200" step="5">
+                </div>
+                <div>
+                    <label for="csGlobalMergeCooldownMinMs">Merge Cooldown Min (ms, 100-5000):</label>
+                    <input type="number" id="csGlobalMergeCooldownMinMs" min="100" max="5000" step="50">
+                </div>
+                <div>
+                    <label for="csGlobalMergeCooldownMaxMs">Merge Cooldown Max (ms, MinMs-10000):</label>
+                    <input type="number" id="csGlobalMergeCooldownMaxMs" min="100" max="10000" step="50">
+                </div>
+                <div>
+                    <label for="csPlayerBaseSpeed">Player Base Speed (1-20):</label>
+                    <input type="number" id="csPlayerBaseSpeed" min="1" max="20" step="0.5">
+                </div>
+                <div>
+                    <label for="csPlayerMassPenaltyFactor">Speed Mass Penalty (0.1-5):</label>
+                    <input type="number" id="csPlayerMassPenaltyFactor" min="0.1" max="5" step="0.1">
+                </div>
+                <div>
+                    <label for="csPlayerMinSpeedCap">Player Min Speed Cap (0.1-2):</label>
+                    <input type="number" id="csPlayerMinSpeedCap" min="0.1" max="2" step="0.1">
+                </div>
+            </div>
+        </div>
+
         <button id="startGameButton">Start Game</button>
         <div id="instructions">
             <h2>Controls:</h2>
             <p>Mouse: Move</p>
-            <p>W: Spew Mass</p>
-            <p>Space: Split</p>
-            <h2>Rules:</h2>
+            <p>W (Game): Spew Mass</p>
+            <p>Space (Game): Split</p>
+            <p>WASD (Spectate Free Roam): Move Camera</p>
+            <h2>Rules: (Defaults - may vary by mode)</h2>
             <ul>
-                <li>Eat food (small dots) to gain 1 mass.</li>
-                <li>Your mass decays by 0.5% per second.</li>
-                <li>Eat cells smaller than you. You must be 130% of their mass.</li>
+                <li>Eat food (small dots) to gain mass.</li>
+                <li>Your mass decays.</li>
+                <li>Eat cells smaller than you (must be X% of their mass).</li>
                 <li>Avoid cells larger than you.</li>
-                <li>Viruses (green spiky circles, 100 mass):
+                <li>Viruses (green spiky circles):
                     <ul>
-                        <li>Eat them if your mass is ≥ 130 (100 * 1.3). Gain 100 mass. Cell splits.</li>
+                        <li>Eat them if your mass is ≥ Y% of virus mass. Gain virus mass. Cell may split.</li>
                         <li>Viruses cannot eat you.</li>
-                        <li>Spew mass (W) into a virus. If its mass exceeds 215, it shoots a new virus and resets.</li>
-                        <li>If a cell with >300 mass hits a virus, it splits into 1 large, 1 medium, and 5-10 tiny
-                            pieces.</li>
+                        <li>Spew mass (W) into a virus. If its mass exceeds a limit, it shoots a new virus and resets.
+                        </li>
                     </ul>
                 </li>
-                <li>Spew Mass (W): Costs 20 mass (min 50 total mass to use). Creates food worth 18 mass for others. All
-                    your cells spew.</li>
-                <li>Split (Space): Splits each of your cells in two (if massive enough). Max 32 cells. Triggers merge
+                <li>Spew Mass (W): Costs Z mass (min total mass to use). Creates food for others. All your cells spew.
+                </li>
+                <li>Split (Space): Splits each of your cells in two (if massive enough). Max N cells. Triggers merge
                     cooldown.</li>
-                <li>Merge Cooldown: After splitting or eating a virus, you have a global cooldown before your cells can
+                <li>Merge Cooldown: After splitting or certain actions, you have a global cooldown before your cells can
                     merge again.</li>
+                <li>Death: Respawn after a delay or choose to spectate.</li>
             </ul>
         </div>
     </div>
@@ -65,14 +196,26 @@
             <div>Mass: <span id="playerMassDisplay">0</span></div>
             <div>Cells: <span id="playerCellCountDisplay">0</span></div>
             <div><span id="playerGlobalMergeCooldownDisplay" style="display:none;">-</span></div>
-            <div id="leaderboard">
-                <h3>Leaderboard</h3>
-                <ol id="leaderboardList"></ol>
-            </div>
-            <div id="gameOverMessage" style="display:none;">
-                <h2>Game Over!</h2>
-                <button id="restartGameButton">Play Again</button>
-            </div>
+        </div>
+        <div id="leaderboard">
+            <h3>Leaderboard</h3>
+            <ol id="leaderboardList"></ol>
+        </div>
+        <div id="gameOverMessage" style="display:none;">
+            <h2 id="gameOverText">Game Over!</h2>
+            <p id="respawnTimerText"></p>
+            <button id="spectateButton" style="display:none;">Spectate</button>
+            <button id="respawnNowButton" style="display:none;">Respawn Now</button>
+            <button id="restartGameButton">Back to Menu</button>
+        </div>
+        <div id="spectateControls" style="display:none;">
+            <span id="spectatingInfo">Spectating: None</span> |
+            <button id="prevSpectateTarget">
+                < Prev</button>
+                    <button id="nextSpectateTarget">Next ></button> |
+                    <button id="toggleFreeRoam">Toggle Free Roam</button> |
+                    <button id="spectateRespawnButton">Respawn</button>
+                    <button id="spectateBackToMenuButton">Main Menu</button>
         </div>
     </div>
 

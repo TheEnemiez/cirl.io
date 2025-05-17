@@ -1,4 +1,3 @@
-// script.js - Main game logic
 document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -9,8 +8,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const numBotsInput = document.getElementById('numBotsInput');
     const botTypeSelect = document.getElementById('botTypeSelect');
     const startGameButton = document.getElementById('startGameButton');
-    const restartGameButton = document.getElementById('restartGameButton');
+    const startAsSpectatorCheckbox = document.getElementById('startAsSpectatorCheckbox');
+
     const gameOverMessage = document.getElementById('gameOverMessage');
+    const gameOverText = document.getElementById('gameOverText');
+    const respawnTimerText = document.getElementById('respawnTimerText');
+    const spectateButton = document.getElementById('spectateButton');
+    const respawnNowButton = document.getElementById('respawnNowButton');
+    const restartGameButton = document.getElementById('restartGameButton');
+
+    const spectateControls = document.getElementById('spectateControls');
+    const spectatingInfo = document.getElementById('spectatingInfo');
+    const prevSpectateTargetButton = document.getElementById('prevSpectateTarget');
+    const nextSpectateTargetButton = document.getElementById('nextSpectateTarget');
+    const toggleFreeRoamButton = document.getElementById('toggleFreeRoam');
+    const spectateRespawnButton = document.getElementById('spectateRespawnButton');
+    const spectateBackToMenuButton = document.getElementById('spectateBackToMenuButton');
 
     const playerNameDisplay = document.getElementById('playerNameDisplay');
     const playerMassDisplay = document.getElementById('playerMassDisplay');
@@ -18,6 +31,225 @@ document.addEventListener('DOMContentLoaded', () => {
     const leaderboardList = document.getElementById('leaderboardList');
     const playerGlobalMergeCooldownDisplay = document.getElementById('playerGlobalMergeCooldownDisplay');
 
+    const gameModeSelect = document.getElementById('gameModeSelect');
+    const customSettingsPanel = document.getElementById('customSettingsPanel');
+
+    const csInputs = {
+        MapSize: document.getElementById('csMapSize'),
+        PlayerStartMass: document.getElementById('csPlayerStartMass'),
+        BotStartMass: document.getElementById('csBotStartMass'),
+        MaxPlayerCells: document.getElementById('csMaxPlayerCells'),
+        EatMassRatio: document.getElementById('csEatMassRatio'),
+        MassDecayRate: document.getElementById('csMassDecayRate'),
+        CellMinMassToSplitFrom: document.getElementById('csCellMinMassToSplitFrom'),
+        MinMassPerSplitPiece: document.getElementById('csMinMassPerSplitPiece'),
+        MaxFoodCount: document.getElementById('csMaxFoodCount'),
+        FoodMassMin: document.getElementById('csFoodMassMin'),
+        FoodMassMax: document.getElementById('csFoodMassMax'),
+        FoodSpawnInterval: document.getElementById('csFoodSpawnInterval'),
+        MaxVirusCount: document.getElementById('csMaxVirusCount'),
+        VirusMassMin: document.getElementById('csVirusMassMin'),
+        VirusMassMax: document.getElementById('csVirusMassMax'),
+        VirusFedLimit: document.getElementById('csVirusFedLimit'),
+        VirusEatMassMultiplier: document.getElementById('csVirusEatMassMultiplier'),
+        PlayerSplitsOnVirusEat: document.getElementById('csPlayerSplitsOnVirusEat'),
+        VirusSpawnInterval: document.getElementById('csVirusSpawnInterval'),
+        SpewedMassYield: document.getElementById('csSpewedMassYield'),
+        SpewedMassCost: document.getElementById('csSpewedMassCost'),
+        MinSpewMassTotal: document.getElementById('csMinSpewMassTotal'),
+        GlobalMergeCooldownMinMs: document.getElementById('csGlobalMergeCooldownMinMs'),
+        GlobalMergeCooldownMaxMs: document.getElementById('csGlobalMergeCooldownMaxMs'),
+        PlayerBaseSpeed: document.getElementById('csPlayerBaseSpeed'),
+        PlayerMassPenaltyFactor: document.getElementById('csPlayerMassPenaltyFactor'),
+        PlayerMinSpeedCap: document.getElementById('csPlayerMinSpeedCap'),
+    };
+    let gameSettings = {};
+    const defaultSettings = {
+        MAP_WIDTH: 3000, MAP_HEIGHT: 3000,
+        PLAYER_START_MASS: 10, BOT_START_MASS: 10,
+        MAX_PLAYER_CELLS: 256, EAT_MASS_RATIO: 1.3,
+        MASS_DECAY_RATE_PER_SECOND: 0.005,
+        CELL_MIN_MASS_TO_SPLIT_FROM: 20, MIN_MASS_PER_SPLIT_PIECE: 10,
+        MAX_FOOD_COUNT: 250,
+        FOOD_MASS_MIN: 1, FOOD_MASS_MAX: 3,
+        FOOD_SPAWN_INTERVAL: 100, // Increased default for less frantic spawning
+        MAX_VIRUS_COUNT: 25,
+        VIRUS_MASS_MIN: 100, VIRUS_MASS_MAX: 100,
+        VIRUS_FED_LIMIT: 215, VIRUS_EAT_MASS_MULTIPLIER: 1.3,
+        PLAYER_SPLITS_ON_VIRUS_EAT: true, VIRUS_SPAWN_INTERVAL: 2500,
+        SPEWED_MASS_YIELD: 18, SPEWED_MASS_COST: 20,
+        MIN_SPEW_MASS_TOTAL: 50,
+        GLOBAL_MERGE_COOLDOWN_MIN_MS: 200, GLOBAL_MERGE_COOLDOWN_MAX_MS: 400,
+        PLAYER_BASE_SPEED: 8, PLAYER_MASS_PENALTY_FACTOR: 1.3, PLAYER_MIN_SPEED_CAP: 0.5,
+        AGGRESSIVE_BOT_SPLIT_EAT_FACTOR: 1.1,
+        GRID_SIZE: 50, VIRUS_COLOR: '#00ff00',
+        VIRUS_SPLIT_MASS_LOW_MIN: 130, VIRUS_SPLIT_MASS_LOW_MAX: 300,
+        VIRUS_SPLIT_LOW_MAX_PIECES: 10, VIRUS_SPLIT_HIGH_MIN_PIECES: 9,
+        SPEWED_MASS_SPEED: 25, SPEWED_MASS_LIFESPAN: 60 * 10000, // Was 60*10000, seems very long. Let's make it 60s
+        MASS_DECAY_INTERVAL: 1000,
+        GLOBAL_MERGE_COOLDOWN_MIN_TOTAL_MASS_FACTOR: 1.0,
+        GLOBAL_MERGE_COOLDOWN_MAX_TOTAL_MASS_FACTOR: 5.0,
+        CELL_OVERLAP_RESOLUTION_FACTOR: 0.2, CELL_SPLIT_EJECT_SPEED_BASE: 40,
+        CELL_SPLIT_EJECT_DURATION: 2500, CELL_EJECTION_DAMPING: 0.99,
+        SPEWED_MASS_DAMPING: 0.98, PLAYER_RESPAWN_DELAY: 3000,
+    };
+    defaultSettings.SPEWED_MASS_LIFESPAN = 60 * 1000; // Correcting lifespan to 60 seconds
+
+
+    const gameModes = {
+        classic: { ...defaultSettings },
+        fastFood: {
+            ...defaultSettings, MAX_FOOD_COUNT: 600, FOOD_SPAWN_INTERVAL: 70,
+            PLAYER_START_MASS: 50, BOT_START_MASS: 8, MASS_DECAY_RATE_PER_SECOND: 0.007,
+            GLOBAL_MERGE_COOLDOWN_MIN_MS: 150, GLOBAL_MERGE_COOLDOWN_MAX_MS: 300,
+            FOOD_MASS_MIN: 1, FOOD_MASS_MAX: 3,
+        },
+        virusMayhem: {
+            ...defaultSettings, MAX_VIRUS_COUNT: 60, VIRUS_SPAWN_INTERVAL: 1200,
+            VIRUS_FED_LIMIT: 160, PLAYER_SPLITS_ON_VIRUS_EAT: false,
+            PLAYER_START_MASS: 150, BOT_START_MASS: 20, VIRUS_EAT_MASS_MULTIPLIER: 1.1,
+            SPEWED_MASS_YIELD: 25, SPEWED_MASS_COST: 15,
+            VIRUS_MASS_MIN: 80, VIRUS_MASS_MAX: 120,
+        },
+        chaos: {
+            ...defaultSettings,
+            MAP_WIDTH: 2000, MAP_HEIGHT: 2000, PLAYER_START_MASS: 200, MAX_PLAYER_CELLS: 16,
+            EAT_MASS_RATIO: 1.1, MASS_DECAY_RATE_PER_SECOND: 0.01,
+            FOOD_MASS_MIN: 5, FOOD_MASS_MAX: 15, MAX_FOOD_COUNT: 100, FOOD_SPAWN_INTERVAL: 250,
+            VIRUS_MASS_MIN: 150, VIRUS_MASS_MAX: 250, MAX_VIRUS_COUNT: 10, VIRUS_FED_LIMIT: 300,
+            PLAYER_SPLITS_ON_VIRUS_EAT: true, SPEWED_MASS_YIELD: 10, SPEWED_MASS_COST: 5,
+            PLAYER_BASE_SPEED: 10, PLAYER_MASS_PENALTY_FACTOR: 1.0,
+            GLOBAL_MERGE_COOLDOWN_MIN_MS: 500, GLOBAL_MERGE_COOLDOWN_MAX_MS: 1000,
+        },
+        custom: { ...defaultSettings }
+    };
+
+    function updateCustomInputFields() {
+        csInputs.MapSize.value = gameSettings.MAP_WIDTH;
+        csInputs.PlayerStartMass.value = gameSettings.PLAYER_START_MASS;
+        csInputs.BotStartMass.value = gameSettings.BOT_START_MASS;
+        csInputs.MaxPlayerCells.value = gameSettings.MAX_PLAYER_CELLS;
+        csInputs.EatMassRatio.value = gameSettings.EAT_MASS_RATIO;
+        csInputs.MassDecayRate.value = gameSettings.MASS_DECAY_RATE_PER_SECOND;
+        csInputs.CellMinMassToSplitFrom.value = gameSettings.CELL_MIN_MASS_TO_SPLIT_FROM;
+        csInputs.MinMassPerSplitPiece.value = gameSettings.MIN_MASS_PER_SPLIT_PIECE;
+        csInputs.MaxFoodCount.value = gameSettings.MAX_FOOD_COUNT;
+        csInputs.FoodMassMin.value = gameSettings.FOOD_MASS_MIN;
+        csInputs.FoodMassMax.value = gameSettings.FOOD_MASS_MAX;
+        csInputs.FoodSpawnInterval.value = gameSettings.FOOD_SPAWN_INTERVAL;
+        csInputs.MaxVirusCount.value = gameSettings.MAX_VIRUS_COUNT;
+        csInputs.VirusMassMin.value = gameSettings.VIRUS_MASS_MIN;
+        csInputs.VirusMassMax.value = gameSettings.VIRUS_MASS_MAX;
+        const minVirusFedLimit = (parseInt(csInputs.VirusMassMax.value) || gameSettings.VIRUS_MASS_MAX) + 10;
+        csInputs.VirusFedLimit.min = minVirusFedLimit;
+        csInputs.VirusFedLimit.value = Math.max(minVirusFedLimit, gameSettings.VIRUS_FED_LIMIT);
+
+        csInputs.VirusEatMassMultiplier.value = gameSettings.VIRUS_EAT_MASS_MULTIPLIER;
+        csInputs.PlayerSplitsOnVirusEat.checked = gameSettings.PLAYER_SPLITS_ON_VIRUS_EAT;
+        csInputs.VirusSpawnInterval.value = gameSettings.VIRUS_SPAWN_INTERVAL;
+        csInputs.SpewedMassYield.value = gameSettings.SPEWED_MASS_YIELD;
+        csInputs.SpewedMassCost.value = gameSettings.SPEWED_MASS_COST;
+        csInputs.MinSpewMassTotal.value = gameSettings.MIN_SPEW_MASS_TOTAL;
+        csInputs.GlobalMergeCooldownMinMs.value = gameSettings.GLOBAL_MERGE_COOLDOWN_MIN_MS;
+        csInputs.GlobalMergeCooldownMaxMs.value = gameSettings.GLOBAL_MERGE_COOLDOWN_MAX_MS;
+        csInputs.PlayerBaseSpeed.value = gameSettings.PLAYER_BASE_SPEED;
+        csInputs.PlayerMassPenaltyFactor.value = gameSettings.PLAYER_MASS_PENALTY_FACTOR;
+        csInputs.PlayerMinSpeedCap.value = gameSettings.PLAYER_MIN_SPEED_CAP;
+    }
+    function loadSettingsFromCustomInputs() {
+        const newMapSize = parseInt(csInputs.MapSize.value) || defaultSettings.MAP_WIDTH;
+        gameSettings.MAP_WIDTH = newMapSize; gameSettings.MAP_HEIGHT = newMapSize;
+        gameSettings.PLAYER_START_MASS = parseInt(csInputs.PlayerStartMass.value) || defaultSettings.PLAYER_START_MASS;
+        gameSettings.BOT_START_MASS = parseInt(csInputs.BotStartMass.value) || defaultSettings.BOT_START_MASS;
+        gameSettings.MAX_PLAYER_CELLS = parseInt(csInputs.MaxPlayerCells.value) || defaultSettings.MAX_PLAYER_CELLS;
+        gameSettings.EAT_MASS_RATIO = parseFloat(csInputs.EatMassRatio.value) || defaultSettings.EAT_MASS_RATIO;
+        gameSettings.MASS_DECAY_RATE_PER_SECOND = parseFloat(csInputs.MassDecayRate.value) || defaultSettings.MASS_DECAY_RATE_PER_SECOND;
+        gameSettings.CELL_MIN_MASS_TO_SPLIT_FROM = parseInt(csInputs.CellMinMassToSplitFrom.value) || defaultSettings.CELL_MIN_MASS_TO_SPLIT_FROM;
+        gameSettings.MIN_MASS_PER_SPLIT_PIECE = parseInt(csInputs.MinMassPerSplitPiece.value) || defaultSettings.MIN_MASS_PER_SPLIT_PIECE;
+        gameSettings.MAX_FOOD_COUNT = parseInt(csInputs.MaxFoodCount.value) || defaultSettings.MAX_FOOD_COUNT;
+        gameSettings.FOOD_MASS_MIN = parseInt(csInputs.FoodMassMin.value) || defaultSettings.FOOD_MASS_MIN;
+        gameSettings.FOOD_MASS_MAX = parseInt(csInputs.FoodMassMax.value) || defaultSettings.FOOD_MASS_MAX;
+        gameSettings.FOOD_SPAWN_INTERVAL = parseInt(csInputs.FoodSpawnInterval.value) || defaultSettings.FOOD_SPAWN_INTERVAL;
+        gameSettings.MAX_VIRUS_COUNT = parseInt(csInputs.MaxVirusCount.value) || defaultSettings.MAX_VIRUS_COUNT;
+        gameSettings.VIRUS_MASS_MIN = parseInt(csInputs.VirusMassMin.value) || defaultSettings.VIRUS_MASS_MIN;
+        gameSettings.VIRUS_MASS_MAX = parseInt(csInputs.VirusMassMax.value) || defaultSettings.VIRUS_MASS_MAX;
+
+        const minVirusFedLimit = gameSettings.VIRUS_MASS_MAX + 10;
+        csInputs.VirusFedLimit.min = minVirusFedLimit;
+        gameSettings.VIRUS_FED_LIMIT = Math.max(minVirusFedLimit, parseInt(csInputs.VirusFedLimit.value) || defaultSettings.VIRUS_FED_LIMIT);
+        csInputs.VirusFedLimit.value = gameSettings.VIRUS_FED_LIMIT;
+
+        gameSettings.VIRUS_EAT_MASS_MULTIPLIER = parseFloat(csInputs.VirusEatMassMultiplier.value) || defaultSettings.VIRUS_EAT_MASS_MULTIPLIER;
+        gameSettings.PLAYER_SPLITS_ON_VIRUS_EAT = csInputs.PlayerSplitsOnVirusEat.checked;
+        gameSettings.VIRUS_SPAWN_INTERVAL = parseInt(csInputs.VirusSpawnInterval.value) || defaultSettings.VIRUS_SPAWN_INTERVAL;
+        gameSettings.SPEWED_MASS_YIELD = parseInt(csInputs.SpewedMassYield.value) || defaultSettings.SPEWED_MASS_YIELD;
+        gameSettings.SPEWED_MASS_COST = parseInt(csInputs.SpewedMassCost.value);
+        if (isNaN(gameSettings.SPEWED_MASS_COST)) gameSettings.SPEWED_MASS_COST = defaultSettings.SPEWED_MASS_COST;
+
+        gameSettings.MIN_SPEW_MASS_TOTAL = parseInt(csInputs.MinSpewMassTotal.value) || defaultSettings.MIN_SPEW_MASS_TOTAL;
+        gameSettings.GLOBAL_MERGE_COOLDOWN_MIN_MS = parseInt(csInputs.GlobalMergeCooldownMinMs.value) || defaultSettings.GLOBAL_MERGE_COOLDOWN_MIN_MS;
+        gameSettings.GLOBAL_MERGE_COOLDOWN_MAX_MS = parseInt(csInputs.GlobalMergeCooldownMaxMs.value) || defaultSettings.GLOBAL_MERGE_COOLDOWN_MAX_MS;
+        gameSettings.PLAYER_BASE_SPEED = parseFloat(csInputs.PlayerBaseSpeed.value) || defaultSettings.PLAYER_BASE_SPEED;
+        gameSettings.PLAYER_MASS_PENALTY_FACTOR = parseFloat(csInputs.PlayerMassPenaltyFactor.value) || defaultSettings.PLAYER_MASS_PENALTY_FACTOR;
+        gameSettings.PLAYER_MIN_SPEED_CAP = parseFloat(csInputs.PlayerMinSpeedCap.value) || defaultSettings.PLAYER_MIN_SPEED_CAP;
+
+        if (gameSettings.FOOD_MASS_MAX < gameSettings.FOOD_MASS_MIN) {
+            gameSettings.FOOD_MASS_MAX = gameSettings.FOOD_MASS_MIN;
+            csInputs.FoodMassMax.value = gameSettings.FOOD_MASS_MAX;
+        }
+        if (gameSettings.VIRUS_MASS_MAX < gameSettings.VIRUS_MASS_MIN) {
+            gameSettings.VIRUS_MASS_MAX = gameSettings.VIRUS_MASS_MIN;
+            csInputs.VirusMassMax.value = gameSettings.VIRUS_MASS_MAX;
+            const newMinVirusFedLimit = gameSettings.VIRUS_MASS_MAX + 10;
+            csInputs.VirusFedLimit.min = newMinVirusFedLimit;
+            gameSettings.VIRUS_FED_LIMIT = Math.max(newMinVirusFedLimit, parseInt(csInputs.VirusFedLimit.value) || defaultSettings.VIRUS_FED_LIMIT);
+            csInputs.VirusFedLimit.value = gameSettings.VIRUS_FED_LIMIT;
+        }
+        if (gameSettings.GLOBAL_MERGE_COOLDOWN_MAX_MS < gameSettings.GLOBAL_MERGE_COOLDOWN_MIN_MS) {
+            gameSettings.GLOBAL_MERGE_COOLDOWN_MAX_MS = gameSettings.GLOBAL_MERGE_COOLDOWN_MIN_MS;
+            csInputs.GlobalMergeCooldownMaxMs.value = gameSettings.GLOBAL_MERGE_COOLDOWN_MAX_MS;
+        }
+    }
+    function applyModeSettings(modeName) {
+        if (gameModes[modeName]) {
+            gameSettings = { ...gameModes[modeName] };
+        } else {
+            gameSettings = { ...gameModes.classic };
+        }
+        if (modeName === 'custom') {
+            customSettingsPanel.classList.remove('hidden');
+            loadSettingsFromCustomInputs();
+        } else {
+            customSettingsPanel.classList.add('hidden');
+        }
+        updateCustomInputFields();
+    }
+
+    gameModeSelect.addEventListener('change', (e) => applyModeSettings(e.target.value));
+    Object.entries(csInputs).forEach(([key, input]) => {
+        input.addEventListener('change', () => {
+            if (gameModeSelect.value === 'custom') loadSettingsFromCustomInputs();
+        });
+        if (input.type === 'number') {
+            input.addEventListener('input', () => {
+                if (gameModeSelect.value === 'custom') loadSettingsFromCustomInputs();
+            });
+        }
+    });
+    if (csInputs.VirusMassMax) {
+        csInputs.VirusMassMax.addEventListener('input', () => {
+            if (gameModeSelect.value === 'custom') {
+                const virusMaxMass = parseInt(csInputs.VirusMassMax.value) || defaultSettings.VIRUS_MASS_MAX;
+                const newMinFedLimit = virusMaxMass + 10;
+                csInputs.VirusFedLimit.min = newMinFedLimit;
+                if (parseInt(csInputs.VirusFedLimit.value) < newMinFedLimit) {
+                    csInputs.VirusFedLimit.value = newMinFedLimit;
+                }
+                loadSettingsFromCustomInputs();
+            }
+        });
+    }
+    applyModeSettings(gameModeSelect.value);
 
     let gameLoopId;
     let player;
@@ -25,84 +257,32 @@ document.addEventListener('DOMContentLoaded', () => {
     let food = [];
     let viruses = [];
     let spewedMasses = [];
+    let screenMouseX = window.innerWidth / 2, screenMouseY = window.innerHeight / 2;
+    let worldMouseX = 0, worldMouseY = 0;
+    const camera = { x: 0, y: 0, zoom: 1, targetZoom: 1 };
 
-    let screenMouseX = window.innerWidth / 2;
-    let screenMouseY = window.innerHeight / 2;
-    let worldMouseX = 0;
-    let worldMouseY = 0;
+    const MIN_ZOOM = 0.1;
+    const MAX_ZOOM = 4.0;
+    const ZOOM_SPEED_FACTOR = 0.05;
 
-    const camera = { x: 0, y: 0, zoom: 1 };
-
-    // Game Constants
-    const MAP_WIDTH = 3000;
-    const MAP_HEIGHT = 3000;
-    const GRID_SIZE = 50;
-
-    const PLAYER_START_MASS = 100;
-    const BOT_START_MASS = 10;
-    const FOOD_MASS = 1;
-    const FOOD_RADIUS = 6;
-    const MAX_FOOD_COUNT = 250;
-    const FOOD_SPAWN_INTERVAL = 150;
-
-    const VIRUS_MASS_DEFAULT = 100;
-    const MAX_VIRUS_COUNT = 25;
-    const VIRUS_SPAWN_INTERVAL = 2500;
-    const VIRUS_EAT_MASS_MULTIPLIER = 1.3;
-    const VIRUS_FED_LIMIT = 215;
-    const VIRUS_COLOR = '#00ff00';
-    const VIRUS_SPLIT_MASS_LOW_MIN = 130;
-    const VIRUS_SPLIT_MASS_LOW_MAX = 300;
-    const VIRUS_SPLIT_LOW_MAX_PIECES = 10;
-    const VIRUS_SPLIT_HIGH_MIN_PIECES = 9;
-
-    const SPEWED_MASS_COST = 20;
-    const SPEWED_MASS_YIELD = 18;
-    const SPEWED_MASS_RADIUS = 18;
-    const MIN_SPEW_MASS_TOTAL = 50;
-    const SPEWED_MASS_SPEED = 25;
-    const SPEWED_MASS_LIFESPAN = 60 * 10000;
-
-    const CELL_MIN_MASS_TO_SPLIT_FROM = 20;
-    const MIN_MASS_PER_SPLIT_PIECE = 10;
-    const MAX_PLAYER_CELLS = 256;
-    const EAT_MASS_RATIO = 1.3;
-
-    const MASS_DECAY_RATE_PER_SECOND = 0.005;
-    const MASS_DECAY_INTERVAL = 1000;
-
-    const GLOBAL_MERGE_COOLDOWN_MIN_TOTAL_MASS = PLAYER_START_MASS;
-    const GLOBAL_MERGE_COOLDOWN_MAX_TOTAL_MASS = 500;
-    const GLOBAL_MERGE_COOLDOWN_MIN_MS = 200;
-    const GLOBAL_MERGE_COOLDOWN_MAX_MS = 400;
-
-    const CELL_OVERLAP_RESOLUTION_FACTOR = 0.2;
-    const CELL_SPLIT_EJECT_SPEED_BASE = 40;
-    const CELL_SPLIT_EJECT_DURATION = 2500;
-    const CELL_EJECTION_DAMPING = 0.99; // Keep this for ejectionVx/Vy
-    const SPEWED_MASS_DAMPING = 0.98;
-
-    const PLAYER_RESPAWN_DELAY = 3000;
     let playerRespawnTimer = 0;
     let isPlayerDead = false;
+    let isSpectating = false;
+    let spectateTargetId = null;
+    let spectateMode = 'target';
+    let freeRoamCameraX = 0;
+    let freeRoamCameraY = 0;
+    const keysPressed = {};
+    const SPECTATE_CAMERA_SPEED = 500;
+    const SPECTATE_FREE_ROAM_ZOOM = 0.7;
+    let playerCanRespawnManually = false;
 
-    let lastDecayTime = 0;
-    let lastFoodSpawnTime = 0;
-    let lastVirusSpawnTime = 0;
-    let lastLeaderboardUpdateTime = 0;
-
+    let lastDecayTime = 0, lastFoodSpawnTime = 0, lastVirusSpawnTime = 0, lastLeaderboardUpdateTime = 0;
     let currentGameBotAiType = 'minion';
-
-    const WORLD_CONSTANTS = { MAP_WIDTH, MAP_HEIGHT, MIN_SPEW_MASS: MIN_SPEW_MASS_TOTAL, CELL_MIN_MASS_TO_SPLIT: CELL_MIN_MASS_TO_SPLIT_FROM, MAX_PLAYER_CELLS, VIRUS_MASS_ABSORBED: VIRUS_MASS_DEFAULT, VIRUS_MAX_SPLIT: VIRUS_SPLIT_LOW_MAX_PIECES };
-
-
     let uniqueIdCounter = 0;
     function getUniqueId() { return uniqueIdCounter++; }
 
-    function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    }
+    function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
@@ -113,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.mass = mass; this.color = color;
             this.radius = 0;
             this.targetRadius = 4 + Math.sqrt(this.mass) * 4;
-            this.radius = this.targetRadius; // Initialize directly
+            this.radius = this.targetRadius;
         }
         updateRadiusAndTarget() { this.targetRadius = 4 + Math.sqrt(this.mass) * 4; }
         animateRadiusLogic(dtFrameFactor) {
@@ -130,36 +310,31 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillStyle = this.color;
             ctx.fill();
             ctx.strokeStyle = darkenColor(this.color, 20);
-            ctx.lineWidth = Math.max(1 / camera.zoom, this.radius / 20);
+            ctx.lineWidth = Math.max(2.5 / camera.zoom, this.radius / 15);
             ctx.stroke();
         }
     }
-
     class Cell extends Entity {
         constructor(x, y, mass, color, name = "", ownerId = null, isBot = false) {
             super(x, y, mass, color);
             this.name = name;
             this.ownerId = ownerId;
             this.isBot = isBot;
-
-            this.vx = 0; // Current smoothed, applied velocity X
-            this.vy = 0; // Current smoothed, applied velocity Y
-
-            this.ejectionVx = 0; // Raw ejection velocity (decays)
-            this.ejectionVy = 0; // Raw ejection velocity (decays)
+            this.vx = 0; this.vy = 0;
+            this.ejectionVx = 0; this.ejectionVy = 0;
             this.ejectionTimer = 0;
-
-            this.splitPartnerId = null; // ID of the cell it recently split from/created
-            this.splitPassthroughEndTime = 0; // Timestamp when passthrough rule with partner ends
-
-            this.updateRadiusAndTarget(); // Sets targetRadius based on initial mass
-            // Radius is set in Entity constructor
+            this.splitPartnerId = null;
+            this.splitPassthroughEndTime = 0;
+            this.updateRadiusAndTarget();
         }
 
         updateSelf(dt, dtFrameFactor, targetWorldX, targetWorldY) {
             this.animateRadiusLogic(dtFrameFactor);
 
-            let desiredSpeed = Math.max(0.5, 8 - Math.log(this.mass + 1) * 1.3);
+            let desiredSpeed = Math.max(
+                gameSettings.PLAYER_MIN_SPEED_CAP,
+                gameSettings.PLAYER_BASE_SPEED - Math.log(this.mass + 1) * gameSettings.PLAYER_MASS_PENALTY_FACTOR
+            );
             let intendedVx = 0;
             let intendedVy = 0;
 
@@ -168,9 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isActuallyEjectingWithForce) {
                 const angleToMouse = Math.atan2(targetWorldY - this.y, targetWorldX - this.x);
                 const playerControlSpeed = desiredSpeed;
-
                 let blendFactor = 0;
-                const remainingEjectionRatio = this.ejectionTimer > 0 ? this.ejectionTimer / CELL_SPLIT_EJECT_DURATION : 0;
+                const remainingEjectionRatio = this.ejectionTimer > 0 ? this.ejectionTimer / gameSettings.CELL_SPLIT_EJECT_DURATION : 0;
                 const ejectionMagnitude = Math.sqrt(this.ejectionVx ** 2 + this.ejectionVy ** 2);
 
                 if (ejectionMagnitude < playerControlSpeed * 0.4 || remainingEjectionRatio < 0.4) {
@@ -186,9 +360,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 intendedVx = (this.ejectionVx * (1 - blendFactor)) + (playerControlledVx * blendFactor);
                 intendedVy = (this.ejectionVy * (1 - blendFactor)) + (playerControlledVy * blendFactor);
 
-                this.ejectionVx *= CELL_EJECTION_DAMPING;
-                this.ejectionVy *= CELL_EJECTION_DAMPING;
-
+                this.ejectionVx *= gameSettings.CELL_EJECTION_DAMPING;
+                this.ejectionVy *= gameSettings.CELL_EJECTION_DAMPING;
             } else {
                 const angle = Math.atan2(targetWorldY - this.y, targetWorldX - this.x);
                 intendedVx = Math.cos(angle) * desiredSpeed;
@@ -202,40 +375,31 @@ document.addEventListener('DOMContentLoaded', () => {
             this.x += this.vx * dtFrameFactor;
             this.y += this.vy * dtFrameFactor;
 
-            this.x = Math.max(this.radius, Math.min(this.x, MAP_WIDTH - this.radius));
-            this.y = Math.max(this.radius, Math.min(this.y, MAP_HEIGHT - this.radius));
+            this.x = Math.max(this.radius, Math.min(this.x, gameSettings.MAP_WIDTH - this.radius));
+            this.y = Math.max(this.radius, Math.min(this.y, gameSettings.MAP_HEIGHT - this.radius));
 
             if (this.ejectionTimer > 0) {
                 this.ejectionTimer -= dt;
                 if (this.ejectionTimer <= 0) {
-                    this.ejectionTimer = 0;
-                    this.ejectionVx = 0;
-                    this.ejectionVy = 0;
-                } else {
-                    if (isActuallyEjectingWithForce && Math.abs(this.ejectionVx) < 0.05 && Math.abs(this.ejectionVy) < 0.05) {
-                        this.ejectionVx = 0;
-                        this.ejectionVy = 0;
-                    }
+                    this.ejectionTimer = 0; this.ejectionVx = 0; this.ejectionVy = 0;
+                } else if (isActuallyEjectingWithForce && Math.abs(this.ejectionVx) < 0.05 && Math.abs(this.ejectionVy) < 0.05) {
+                    this.ejectionVx = 0; this.ejectionVy = 0;
                 }
             }
         }
 
         decayMass() {
-            const minMassThreshold = this.isBot ? BOT_START_MASS : PLAYER_START_MASS;
-            const massToLose = Math.floor(this.mass * MASS_DECAY_RATE_PER_SECOND);
+            const massToLose = Math.floor(this.mass * gameSettings.MASS_DECAY_RATE_PER_SECOND);
             let massChanged = false;
 
-            if (this.mass - massToLose >= MIN_MASS_PER_SPLIT_PIECE / 2) {
+            if (this.mass - massToLose >= gameSettings.MIN_MASS_PER_SPLIT_PIECE / 2) {
                 this.mass -= massToLose;
                 massChanged = true;
-            } else if (this.mass > MIN_MASS_PER_SPLIT_PIECE / 2 && massToLose > 0) {
-                this.mass = MIN_MASS_PER_SPLIT_PIECE / 2;
+            } else if (this.mass > gameSettings.MIN_MASS_PER_SPLIT_PIECE / 2 && massToLose > 0) {
+                this.mass = gameSettings.MIN_MASS_PER_SPLIT_PIECE / 2;
                 massChanged = true;
             }
-
-            if (massChanged) {
-                this.updateRadiusAndTarget();
-            }
+            if (massChanged) this.updateRadiusAndTarget();
         }
         draw(ctx) {
             super.draw(ctx);
@@ -255,64 +419,99 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let currentWorldConstantsForBots = {}; // Global scope for main game bots
+
     class PlayerController {
-        constructor(id, name, startMass, color, isBot = false, aiType = null) {
-            this.id = id; this.name = name; this.color = color;
-            this.cells = []; this.isBot = isBot;
-            this.targetX = MAP_WIDTH / 2; this.targetY = MAP_HEIGHT / 2;
+        constructor(id, name, startMass, color, isBot = false, aiType = null, customWorldConstants = null, customAiParams = null) {
+            this.id = id;
+            this.name = name;
+            this.color = color;
+            this.cells = [];
+            this.isBot = isBot;
+
+            const wcToUse = customWorldConstants || currentWorldConstantsForBots || gameSettings;
+
+            this.targetX = wcToUse.MAP_WIDTH / 2;
+            this.targetY = wcToUse.MAP_HEIGHT / 2;
             this.globalMergeCooldown = 0;
-            this.spawnInitialCell(startMass);
-            if (isBot && aiType && AiTypes[aiType]) {
-                this.ai = new AiTypes[aiType](this, WORLD_CONSTANTS);
-            } else if (isBot) {
-                console.warn(`Invalid AI type specified: ${aiType}. Defaulting to 'random' for bot ${name}`);
-                this.ai = new AiTypes['random'](this, WORLD_CONSTANTS);
+
+            this.spawnInitialCell(startMass, wcToUse);
+
+            if (isBot && aiType && AiTypes && AiTypes[aiType]) {
+                if (typeof AiTypes[aiType] === 'function') {
+                    this.ai = new AiTypes[aiType](this, wcToUse, customAiParams || {});
+                } else {
+                    console.error(`Error: AiTypes[${aiType}] is not a constructor for bot ${name}. Defaulting AI.`);
+                    if (AiTypes && typeof AiTypes.random === 'function') {
+                        this.ai = new AiTypes.random(this, wcToUse, {});
+                    } else {
+                        console.error(`CRITICAL: Cannot instantiate AI for bot ${name}. AiTypes.random also unavailable.`);
+                    }
+                }
+            } else if (isBot && !aiType) { // Fallback if no aiType specified
+                console.warn(`Warning: Bot ${name} created without explicit aiType. Defaulting to 'random' AI.`);
+                if (AiTypes && typeof AiTypes.random === 'function') {
+                    this.ai = new AiTypes.random(this, wcToUse, {});
+                } else {
+                    console.error(`CRITICAL: Cannot instantiate default 'random' AI for bot ${name}. AiTypes.random is not a constructor or AiTypes not populated.`);
+                }
             }
         }
-        spawnInitialCell(mass) {
+
+        spawnInitialCell(mass, wcContext) { // wcContext provides MAP_WIDTH/HEIGHT for spawning
             const cellRadius = 4 + Math.sqrt(mass) * 4;
-            const spawnPos = findSafeSpawnPosition(cellRadius * 1.5, this.isBot ? "bot" : "player");
+            let spawnPos;
+            // Simplified spawning for simulation if wcContext is different from global gameSettings
+            // Assuming SimulationGame provides its own world constants object.
+            if (wcContext && wcContext !== gameSettings && wcContext.MAP_WIDTH && wcContext.MAP_HEIGHT) {
+                // Fixed positions for simulation bots, could be randomized within sim context too
+                const sideFactor = (this.id % 2 === 0) ? 0.25 : 0.75; // crude way to separate two bots
+                spawnPos = { x: wcContext.MAP_WIDTH * sideFactor, y: wcContext.MAP_HEIGHT / 2, foundSafe: true };
+            } else { // Normal game spawning
+                spawnPos = findSafeSpawnPosition(cellRadius * 1.5, this.isBot ? "bot" : "player");
+            }
             const newCell = new Cell(spawnPos.x, spawnPos.y, mass, this.color, this.name, this.id, this.isBot);
             this.cells.push(newCell);
         }
-        respawn() {
+
+        respawn() { // Used by main game player
             this.cells = [];
             this.globalMergeCooldown = 0;
-            this.spawnInitialCell(PLAYER_START_MASS);
-            if (!this.isBot) {
-                isPlayerDead = false; playerRespawnTimer = 0;
-                const com = this.getCenterOfMassCell();
-                camera.x = com.x; camera.y = com.y;
-            }
+            // Respawn uses global gameSettings and currentWorldConstantsForBots implicitly via spawnInitialCell's fallback
+            this.spawnInitialCell(gameSettings.PLAYER_START_MASS, currentWorldConstantsForBots);
         }
+
         getCenterOfMassCell() {
-            if (this.cells.length === 0) return { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2, radius: 10, mass: 0 };
+            if (this.cells.length === 0) return { x: gameSettings.MAP_WIDTH / 2, y: gameSettings.MAP_HEIGHT / 2, radius: 10, mass: 0 };
             let totalMass = 0; let comX = 0; let comY = 0; let maxRadius = 0;
             this.cells.forEach(cell => {
                 totalMass += cell.mass; comX += cell.x * cell.mass; comY += cell.y * cell.mass;
                 if (cell.radius > maxRadius) maxRadius = cell.radius;
             });
             if (totalMass === 0 && this.cells.length > 0) return { x: this.cells[0].x, y: this.cells[0].y, radius: this.cells[0].radius, mass: 0 };
-            if (totalMass === 0) return { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2, radius: 10, mass: 0 };
+            if (totalMass === 0) return { x: gameSettings.MAP_WIDTH / 2, y: gameSettings.MAP_HEIGHT / 2, radius: 10, mass: 0 };
             return { x: comX / totalMass, y: comY / totalMass, radius: maxRadius, mass: totalMass };
         }
         calculateGlobalMergeCooldown(totalMass) {
-            if (totalMass <= GLOBAL_MERGE_COOLDOWN_MIN_TOTAL_MASS) return GLOBAL_MERGE_COOLDOWN_MIN_MS;
-            if (totalMass >= GLOBAL_MERGE_COOLDOWN_MAX_TOTAL_MASS) return GLOBAL_MERGE_COOLDOWN_MAX_MS;
-            const ratio = (totalMass - GLOBAL_MERGE_COOLDOWN_MIN_TOTAL_MASS) /
-                (GLOBAL_MERGE_COOLDOWN_MAX_TOTAL_MASS - GLOBAL_MERGE_COOLDOWN_MIN_TOTAL_MASS);
-            return GLOBAL_MERGE_COOLDOWN_MIN_MS + ratio * (GLOBAL_MERGE_COOLDOWN_MAX_MS - GLOBAL_MERGE_COOLDOWN_MIN_MS);
+            const minTotalMass = gameSettings.PLAYER_START_MASS * gameSettings.GLOBAL_MERGE_COOLDOWN_MIN_TOTAL_MASS_FACTOR;
+            const maxTotalMass = gameSettings.PLAYER_START_MASS * gameSettings.GLOBAL_MERGE_COOLDOWN_MAX_TOTAL_MASS_FACTOR;
+
+            if (totalMass <= minTotalMass) return gameSettings.GLOBAL_MERGE_COOLDOWN_MIN_MS;
+            if (totalMass >= maxTotalMass) return gameSettings.GLOBAL_MERGE_COOLDOWN_MAX_MS;
+            const ratio = (totalMass - minTotalMass) / (maxTotalMass - minTotalMass);
+            return gameSettings.GLOBAL_MERGE_COOLDOWN_MIN_MS + ratio * (gameSettings.GLOBAL_MERGE_COOLDOWN_MAX_MS - gameSettings.GLOBAL_MERGE_COOLDOWN_MIN_MS);
         }
 
-
-        update(dt, dtFrameFactor) {
+        update(dt, dtFrameFactor, allEntitiesForAICtx = null) { // Added allEntitiesForAICtx for simulation
             if (this.globalMergeCooldown > 0) {
                 this.globalMergeCooldown -= dt;
                 if (this.globalMergeCooldown < 0) this.globalMergeCooldown = 0;
             }
 
             if (this.isBot && this.ai) {
-                this.ai.update(dt, { food, viruses, players: [player, ...bots.filter(b => b !== this)] });
+                // For simulation, AI needs entities from its own simulation context
+                const entitiesContext = allEntitiesForAICtx || { food, viruses, players: bots.filter(b => b !== this).concat(player && !isPlayerDead ? [player] : []), spewedMasses };
+                this.ai.update(dt, entitiesContext);
             }
 
             this.cells.forEach(cell => {
@@ -322,70 +521,50 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (this.cells.length > 1) {
-                // STAGE 1: Overlap Resolution (if globalMergeCooldown > 0)
                 if (this.globalMergeCooldown > 0) {
-                    const now = Date.now();
+                    const now = Date.now(); // Or use simulated time if dt is very large
                     for (let i = 0; i < this.cells.length; i++) {
                         for (let j = i + 1; j < this.cells.length; j++) {
-                            const cell1 = this.cells[i];
-                            const cell2 = this.cells[j];
-
+                            const cell1 = this.cells[i]; const cell2 = this.cells[j];
                             if (!cell1 || !cell2) continue;
-
                             let passthroughActiveForThisPair = false;
                             if (cell1.splitPartnerId === cell2.id && cell2.splitPartnerId === cell1.id) {
                                 if (now < cell1.splitPassthroughEndTime && now < cell2.splitPassthroughEndTime) {
                                     passthroughActiveForThisPair = true;
-                                    // Check for separation
-                                    const dx_sep = cell2.x - cell1.x;
-                                    const dy_sep = cell2.y - cell1.y;
+                                    const dx_sep = cell2.x - cell1.x; const dy_sep = cell2.y - cell1.y;
                                     const distSq_sep = dx_sep * dx_sep + dy_sep * dy_sep;
                                     const sumRadii_sep = cell1.radius + cell2.radius;
-                                    // Use a slight tolerance (e.g., 0.95 of sumRadii^2) to ensure they are clear
                                     if (distSq_sep >= sumRadii_sep * sumRadii_sep * 0.95) {
                                         cell1.splitPartnerId = null; cell1.splitPassthroughEndTime = 0;
                                         cell2.splitPartnerId = null; cell2.splitPassthroughEndTime = 0;
                                         passthroughActiveForThisPair = false;
                                     }
                                 } else {
-                                    // Timer expired
                                     cell1.splitPartnerId = null; cell1.splitPassthroughEndTime = 0;
                                     cell2.splitPartnerId = null; cell2.splitPassthroughEndTime = 0;
                                     passthroughActiveForThisPair = false;
                                 }
                             }
+                            if (passthroughActiveForThisPair) continue;
 
-                            if (passthroughActiveForThisPair) {
-                                continue; // This specific parent-child pair ignores each other for pushing
-                            }
-
-                            // If not a passthrough pair, proceed with standard overlap resolution
-                            // This logic respects individual cell ejectionTimers for general push immunity
-                            const dx = cell2.x - cell1.x;
-                            const dy = cell2.y - cell1.y;
+                            const dx = cell2.x - cell1.x; const dy = cell2.y - cell1.y;
                             const distanceSq = dx * dx + dy * dy;
                             const sumRadii = cell1.radius + cell2.radius;
-
                             if (distanceSq < (sumRadii * sumRadii) && distanceSq > 0.001) {
                                 const distance = Math.sqrt(distanceSq);
                                 const overlap = sumRadii - distance;
                                 if (overlap > 0) {
                                     const invDistance = 1 / distance;
-                                    const normDx = dx * invDistance;
-                                    const normDy = dy * invDistance;
-                                    const moveAmount = overlap * CELL_OVERLAP_RESOLUTION_FACTOR;
+                                    const normDx = dx * invDistance; const normDy = dy * invDistance;
+                                    const moveAmount = overlap * gameSettings.CELL_OVERLAP_RESOLUTION_FACTOR;
                                     const totalMassForOverlap = cell1.mass + cell2.mass;
                                     let move1Factor = 0.5; let move2Factor = 0.5;
-
                                     if (totalMassForOverlap > 0) {
                                         move1Factor = cell2.mass / totalMassForOverlap;
                                         move2Factor = cell1.mass / totalMassForOverlap;
                                     }
                                     move1Factor = Math.max(0.1, Math.min(0.9, move1Factor));
                                     move2Factor = 1.0 - move1Factor;
-
-                                    // A cell is pushed only if its own ejectionTimer is not active
-                                    // (meaning it's not currently in an ejection state that grants push immunity)
                                     if (cell1.ejectionTimer <= 0) {
                                         cell1.x -= normDx * moveAmount * move1Factor;
                                         cell1.y -= normDy * moveAmount * move1Factor;
@@ -394,12 +573,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                         cell2.x += normDx * moveAmount * move2Factor;
                                         cell2.y += normDy * moveAmount * move2Factor;
                                     }
-
-                                    // Boundary checks for cells that were potentially pushed
                                     [cell1, cell2].forEach(c => {
                                         if ((c === cell1 && cell1.ejectionTimer <= 0) || (c === cell2 && cell2.ejectionTimer <= 0)) {
-                                            c.x = Math.max(c.radius, Math.min(c.x, MAP_WIDTH - c.radius));
-                                            c.y = Math.max(c.radius, Math.min(c.y, MAP_HEIGHT - c.radius));
+                                            c.x = Math.max(c.radius, Math.min(c.x, gameSettings.MAP_WIDTH - c.radius));
+                                            c.y = Math.max(c.radius, Math.min(c.y, gameSettings.MAP_HEIGHT - c.radius));
                                         }
                                     });
                                 }
@@ -407,55 +584,30 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 }
-
-                // STAGE 2: Actual Merge Processing (if cooldown is over)
                 if (this.globalMergeCooldown <= 0 && this.cells.length > 1) {
-                    let cellsToProcess = [...this.cells];
-                    let mergedInThisPass;
-
+                    let cellsToProcess = [...this.cells]; let mergedInThisPass;
                     do {
-                        mergedInThisPass = false;
-                        let cellsToRemove = new Set();
-
+                        mergedInThisPass = false; let cellsToRemove = new Set();
                         for (let i = 0; i < cellsToProcess.length; i++) {
                             for (let j = i + 1; j < cellsToProcess.length; j++) {
-                                const cell1 = cellsToProcess[i];
-                                const cell2 = cellsToProcess[j];
-
-                                if (cellsToRemove.has(cell1.id) || cellsToRemove.has(cell2.id)) {
-                                    continue;
-                                }
-
-                                const dx = cell2.x - cell1.x;
-                                const dy = cell2.y - cell1.y;
+                                const cell1 = cellsToProcess[i]; const cell2 = cellsToProcess[j];
+                                if (cellsToRemove.has(cell1.id) || cellsToRemove.has(cell2.id)) continue;
+                                const dx = cell2.x - cell1.x; const dy = cell2.y - cell1.y;
                                 const distanceSq = dx * dx + dy * dy;
                                 const canPhysicallyMerge = distanceSq < (Math.max(cell1.radius, cell2.radius) ** 2);
-
                                 if (canPhysicallyMerge) {
                                     const absorbingCell = cell1.mass >= cell2.mass ? cell1 : cell2;
                                     const absorbedCell = cell1.mass < cell2.mass ? cell1 : cell2;
-
                                     if (cellsToRemove.has(absorbingCell.id)) continue;
-
-                                    const M1_old = absorbingCell.mass;
-                                    const M2 = absorbedCell.mass;
-                                    const totalNewMass = M1_old + M2;
-
-                                    absorbingCell.mass = totalNewMass;
+                                    absorbingCell.mass += absorbedCell.mass;
                                     absorbingCell.updateRadiusAndTarget();
-
                                     cellsToRemove.add(absorbedCell.id);
                                     mergedInThisPass = true;
                                 }
                             }
                         }
-
-                        if (mergedInThisPass) {
-                            cellsToProcess = cellsToProcess.filter(c => !cellsToRemove.has(c.id));
-                        }
-
+                        if (mergedInThisPass) cellsToProcess = cellsToProcess.filter(c => !cellsToRemove.has(c.id));
                     } while (mergedInThisPass && cellsToProcess.length > 1);
-
                     this.cells = cellsToProcess;
                 }
             }
@@ -465,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
         getTotalMass() { return this.cells.reduce((sum, cell) => sum + cell.mass, 0); }
 
         initiateSplit() {
-            if (this.cells.length >= MAX_PLAYER_CELLS) return;
+            if (this.cells.length >= gameSettings.MAX_PLAYER_CELLS) return;
             const MAX_EJECT_SPEED_BONUS_FROM_MASS = 15;
             const BASE_EJECT_SPEED_FACTOR = 3.0;
 
@@ -473,27 +625,22 @@ document.addEventListener('DOMContentLoaded', () => {
             let currentTotalCellCount = this.cells.length;
             let splitOccurred = false;
             const now = Date.now();
-            const passthroughDuration = 1500; // ms
+            const passthroughDuration = 1500;
 
             for (const cell of cellsToConsiderSplitting) {
-                if (currentTotalCellCount >= MAX_PLAYER_CELLS) break;
-                if (!this.cells.includes(cell) || cell.mass < CELL_MIN_MASS_TO_SPLIT_FROM) continue;
+                if (currentTotalCellCount >= gameSettings.MAX_PLAYER_CELLS) break;
+                if (!this.cells.includes(cell) || cell.mass < gameSettings.CELL_MIN_MASS_TO_SPLIT_FROM) continue;
 
                 const originalMass = cell.mass;
                 const massOfParentPiece = Math.floor(originalMass / 2);
                 const massOfNewPiece = originalMass - massOfParentPiece;
 
-                if (massOfNewPiece < MIN_MASS_PER_SPLIT_PIECE || massOfParentPiece < MIN_MASS_PER_SPLIT_PIECE) continue;
+                if (massOfNewPiece < gameSettings.MIN_MASS_PER_SPLIT_PIECE || massOfParentPiece < gameSettings.MIN_MASS_PER_SPLIT_PIECE) continue;
 
-                // --- PARENT CELL MODIFICATION ---
                 cell.mass = massOfParentPiece;
                 cell.updateRadiusAndTarget();
-                // Short ejectionTimer for parent's own movement style (standard control) and brief general push immunity.
-                cell.ejectionTimer = Math.min(100, CELL_SPLIT_EJECT_DURATION / 10);
-                cell.ejectionVx = 0;
-                cell.ejectionVy = 0;
-                // splitPartnerId and splitPassthroughEndTime will be set after newCell is created.
-                // --- END PARENT CELL MODIFICATION ---
+                cell.ejectionTimer = Math.min(100, gameSettings.CELL_SPLIT_EJECT_DURATION / 10);
+                cell.ejectionVx = 0; cell.ejectionVy = 0;
 
                 const angle = this.isBot ?
                     (this.ai && (this.targetX !== undefined) ? Math.atan2(this.targetY - cell.y, this.targetX - cell.x) : Math.random() * Math.PI * 2)
@@ -505,17 +652,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newCell = new Cell(newX, newY, massOfNewPiece, this.color, this.name, this.id, this.isBot);
 
                 const massBasedSpeedBonus = Math.min(Math.sqrt(massOfNewPiece) * 0.4, MAX_EJECT_SPEED_BONUS_FROM_MASS);
-                const newPieceEjectSpeed = (CELL_SPLIT_EJECT_SPEED_BASE + massBasedSpeedBonus) / BASE_EJECT_SPEED_FACTOR;
+                const newPieceEjectSpeed = (gameSettings.CELL_SPLIT_EJECT_SPEED_BASE + massBasedSpeedBonus) / BASE_EJECT_SPEED_FACTOR;
 
                 newCell.ejectionVx = Math.cos(angle) * newPieceEjectSpeed;
                 newCell.ejectionVy = Math.sin(angle) * newPieceEjectSpeed;
-                newCell.ejectionTimer = CELL_SPLIT_EJECT_DURATION; // For its own ejection flight
+                newCell.ejectionTimer = gameSettings.CELL_SPLIT_EJECT_DURATION;
 
-                // Set up passthrough mechanism for this parent-child pair
-                cell.splitPartnerId = newCell.id;
-                cell.splitPassthroughEndTime = now + passthroughDuration;
-                newCell.splitPartnerId = cell.id;
-                newCell.splitPassthroughEndTime = now + passthroughDuration;
+                cell.splitPartnerId = newCell.id; cell.splitPassthroughEndTime = now + passthroughDuration;
+                newCell.splitPartnerId = cell.id; newCell.splitPassthroughEndTime = now + passthroughDuration;
 
                 this.cells.push(newCell);
                 currentTotalCellCount++;
@@ -526,40 +670,46 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        initiateSpew() {
-            if (this.getTotalMass() < MIN_SPEW_MASS_TOTAL) return;
+        initiateSpew(targetSpewedMassesArray = null) { // Allow passing target array for simulation
+            if (this.getTotalMass() < gameSettings.MIN_SPEW_MASS_TOTAL) return;
+            const spewedMassRadius = 4 + Math.sqrt(gameSettings.SPEWED_MASS_YIELD) * 4;
+            const actualSpewedMassesArray = targetSpewedMassesArray || spewedMasses; // Use global if not provided
+
             this.cells.forEach(cell => {
-                if (cell.mass > SPEWED_MASS_COST + PLAYER_START_MASS / 2 && cell.ejectionTimer <= 0) {
-                    cell.mass -= SPEWED_MASS_COST;
+                if (cell.mass > gameSettings.SPEWED_MASS_COST + gameSettings.MIN_MASS_PER_SPLIT_PIECE && cell.ejectionTimer <= 0) {
+                    cell.mass -= gameSettings.SPEWED_MASS_COST;
                     cell.updateRadiusAndTarget();
 
                     const angle = this.isBot ?
                         (this.ai && (this.targetX !== undefined) ? Math.atan2(this.targetY - cell.y, this.targetX - cell.x) : Math.random() * Math.PI * 2)
                         : Math.atan2(worldMouseY - cell.y, worldMouseX - cell.x);
-                    const ejectDist = cell.radius + SPEWED_MASS_RADIUS + 2;
+                    const ejectDist = cell.radius + spewedMassRadius + 2;
                     let spewX = cell.x + Math.cos(angle) * ejectDist; let spewY = cell.y + Math.sin(angle) * ejectDist;
-                    const smVx = Math.cos(angle) * SPEWED_MASS_SPEED; const smVy = Math.sin(angle) * SPEWED_MASS_SPEED;
-                    const SPEWED_CHECK_RADIUS = SPEWED_MASS_RADIUS * 1.5;
+                    const smVx = Math.cos(angle) * gameSettings.SPEWED_MASS_SPEED; const smVy = Math.sin(angle) * gameSettings.SPEWED_MASS_SPEED;
+
+                    const SPEWED_CHECK_RADIUS = spewedMassRadius * 1.5;
                     for (let k = 0; k < 3; k++) {
                         let conflict = false;
-                        for (const existingSM of spewedMasses) {
+                        for (const existingSM of actualSpewedMassesArray) {
                             const distSq = (spewX - existingSM.x) ** 2 + (spewY - existingSM.y) ** 2;
                             if (distSq < (SPEWED_CHECK_RADIUS + existingSM.radius) ** 2 * 0.25) { conflict = true; break; }
                         }
                         if (!conflict) break;
-                        spewX += (Math.random() - 0.5) * SPEWED_MASS_RADIUS * 4;
-                        spewY += (Math.random() - 0.5) * SPEWED_MASS_RADIUS * 4;
-                        spewX = Math.max(SPEWED_MASS_RADIUS, Math.min(spewX, MAP_WIDTH - SPEWED_MASS_RADIUS));
-                        spewY = Math.max(SPEWED_MASS_RADIUS, Math.min(spewY, MAP_HEIGHT - SPEWED_MASS_RADIUS));
+                        spewX += (Math.random() - 0.5) * spewedMassRadius * 4;
+                        spewY += (Math.random() - 0.5) * spewedMassRadius * 4;
+                        spewX = Math.max(spewedMassRadius, Math.min(spewX, gameSettings.MAP_WIDTH - spewedMassRadius)); // Use gameSettings for bounds
+                        spewY = Math.max(spewedMassRadius, Math.min(spewY, gameSettings.MAP_HEIGHT - spewedMassRadius));
                     }
-                    spewedMasses.push(new SpewedMass(spewX, spewY, this.color, this.id, smVx, smVy));
+                    const newSpew = new SpewedMass(spewX, spewY, this.color, this.id, smVx, smVy)
+                    newSpew.id = getUniqueId(); // ensure unique ID for spewed mass
+                    actualSpewedMassesArray.push(newSpew);
                 }
             });
         }
 
         applyMassDecay() {
             this.cells.forEach(cell => cell.decayMass());
-            this.cells = this.cells.filter(cell => cell.mass >= MIN_MASS_PER_SPLIT_PIECE / 2);
+            this.cells = this.cells.filter(cell => cell.mass >= gameSettings.MIN_MASS_PER_SPLIT_PIECE / 2);
         }
 
         handleVirusEatSplit(eatenCellOriginal) {
@@ -567,227 +717,162 @@ document.addEventListener('DOMContentLoaded', () => {
             let cellToProcess = (cellIndex !== -1) ? this.cells[cellIndex] : null;
             if (!cellToProcess || cellToProcess.mass <= 0) return;
 
+            if (!gameSettings.PLAYER_SPLITS_ON_VIRUS_EAT) {
+                return;
+            }
+
             const originalMass = cellToProcess.mass;
             const originalX = cellToProcess.x;
             const originalY = cellToProcess.y;
             this.cells.splice(cellIndex, 1);
             let newCells = [];
-            const minPieceForVirusSplit = MIN_MASS_PER_SPLIT_PIECE;
+            const minPieceForVirusSplit = gameSettings.MIN_MASS_PER_SPLIT_PIECE;
             const MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS = 10;
             const BASE_EJECT_SPEED_FACTOR_VIRUS = 3.2;
             const VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER = 1.0;
 
-            if (originalMass > 300 && (MAX_PLAYER_CELLS - this.cells.length) >= 3) {
-                let remainingMass = originalMass;
-                let mainBlobMass = Math.max(minPieceForVirusSplit, Math.floor(originalMass * 0.50));
-                if (remainingMass - mainBlobMass < minPieceForVirusSplit * 2) {
-                    mainBlobMass = Math.max(minPieceForVirusSplit, remainingMass - (minPieceForVirusSplit * 2));
-                }
-                if (mainBlobMass < minPieceForVirusSplit) mainBlobMass = minPieceForVirusSplit;
-                const mainBlob = new Cell(originalX, originalY, mainBlobMass, this.color, this.name, this.id, this.isBot);
-                mainBlob.ejectionTimer = 0;
-                newCells.push(mainBlob);
-                remainingMass -= mainBlobMass;
+            const numPieces = Math.min(gameSettings.VIRUS_SPLIT_LOW_MAX_PIECES, gameSettings.MAX_PLAYER_CELLS - this.cells.length, Math.floor(originalMass / minPieceForVirusSplit) || 1);
+            const massPerPiece = (numPieces > 0) ? Math.floor(originalMass / numPieces) : 0;
 
-                let secondPieceMass = 0;
-                if (remainingMass >= minPieceForVirusSplit && (MAX_PLAYER_CELLS - (this.cells.length + newCells.length)) >= 1) {
-                    secondPieceMass = Math.max(minPieceForVirusSplit, Math.floor(originalMass * 0.25));
-                    if (secondPieceMass > remainingMass - minPieceForVirusSplit) {
-                        secondPieceMass = Math.max(minPieceForVirusSplit, remainingMass - minPieceForVirusSplit);
-                    }
-                    if (secondPieceMass > remainingMass) secondPieceMass = remainingMass;
-                    if (secondPieceMass < minPieceForVirusSplit && remainingMass >= minPieceForVirusSplit) secondPieceMass = minPieceForVirusSplit;
-                    if (secondPieceMass >= minPieceForVirusSplit) {
-                        const anglePiece2 = Math.random() * Math.PI * 2;
-                        const ejectDistPiece2 = mainBlob.radius > 0 ? mainBlob.radius * 0.3 : 5;
-                        const piece2X = originalX + Math.cos(anglePiece2) * ejectDistPiece2;
-                        const piece2Y = originalY + Math.sin(anglePiece2) * ejectDistPiece2;
-                        const piece2 = new Cell(piece2X, piece2Y, secondPieceMass, this.color, this.name, this.id, this.isBot);
-                        const massBasedSpeedBonus2 = Math.min(Math.sqrt(secondPieceMass) * 0.35, MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS);
-                        const ejectSpeed2 = (CELL_SPLIT_EJECT_SPEED_BASE * 0.9 + massBasedSpeedBonus2) / BASE_EJECT_SPEED_FACTOR_VIRUS;
-                        piece2.ejectionVx = Math.cos(anglePiece2) * ejectSpeed2;
-                        piece2.ejectionVy = Math.sin(anglePiece2) * ejectSpeed2;
-                        piece2.ejectionTimer = CELL_SPLIT_EJECT_DURATION * VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER;
-                        newCells.push(piece2);
-                        remainingMass -= secondPieceMass;
-                    }
-                }
-                let numTinyPieces = Math.floor(Math.random() * 6) + 5;
-                for (let i = 0; i < numTinyPieces; i++) {
-                    if (remainingMass < minPieceForVirusSplit || (MAX_PLAYER_CELLS - (this.cells.length + newCells.length)) <= 0) break;
-                    let tinyMass = Math.floor(Math.random() * 41) + 10;
-                    tinyMass = Math.min(tinyMass, remainingMass);
-                    if (tinyMass < minPieceForVirusSplit) {
-                        if (remainingMass >= minPieceForVirusSplit) tinyMass = minPieceForVirusSplit; else break;
-                    }
-                    const angleTiny = (i / numTinyPieces) * Math.PI * 2 + (Math.random() - 0.5) * 0.8;
-                    const ejectDistTiny = (mainBlob.radius > 0 ? mainBlob.radius * 0.5 : 10) + Math.random() * 20;
-                    const tinyX = originalX + Math.cos(angleTiny) * ejectDistTiny;
-                    const tinyY = originalY + Math.sin(angleTiny) * ejectDistTiny;
-                    const tinyPiece = new Cell(tinyX, tinyY, tinyMass, this.color, this.name, this.id, this.isBot);
-                    const massBasedSpeedBonusTiny = Math.min(Math.sqrt(tinyMass) * 0.3, MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS);
-                    const ejectSpeedTiny = (CELL_SPLIT_EJECT_SPEED_BASE * 1.1 + massBasedSpeedBonusTiny) / BASE_EJECT_SPEED_FACTOR_VIRUS;
-                    tinyPiece.ejectionVx = Math.cos(angleTiny) * ejectSpeedTiny;
-                    tinyPiece.ejectionVy = Math.sin(angleTiny) * ejectSpeedTiny;
-                    tinyPiece.ejectionTimer = CELL_SPLIT_EJECT_DURATION * (VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER + 0.2);
-                    newCells.push(tinyPiece);
-                    remainingMass -= tinyMass;
-                }
-                if (remainingMass > 0 && newCells.length > 0 && newCells[0].id === mainBlob.id) {
-                    newCells[0].mass += remainingMass; newCells[0].updateRadiusAndTarget();
-                }
-
-            } else if (originalMass >= VIRUS_SPLIT_MASS_LOW_MIN && originalMass <= VIRUS_SPLIT_MASS_LOW_MAX) {
-                let numPieces = Math.floor(originalMass / (minPieceForVirusSplit * 1.25));
-                numPieces = Math.min(numPieces, VIRUS_SPLIT_LOW_MAX_PIECES, MAX_PLAYER_CELLS - this.cells.length);
-                if (numPieces <= 1 && MAX_PLAYER_CELLS - this.cells.length >= 1) numPieces = 2;
-                const massPerPiece = (numPieces > 0) ? Math.floor(originalMass / numPieces) : 0;
-                if (numPieces <= 0 || massPerPiece < minPieceForVirusSplit) {
-                    const reCell = new Cell(originalX, originalY, originalMass, this.color, this.name, this.id, this.isBot);
-                    this.cells.push(reCell); this.globalMergeCooldown = this.calculateGlobalMergeCooldown(this.getTotalMass()); return;
-                }
-                for (let i = 0; i < numPieces; i++) {
-                    if (this.cells.length + newCells.length >= MAX_PLAYER_CELLS) break;
-                    const angle = (i / numPieces) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-                    const ejectDist = minPieceForVirusSplit * 0.3;
-                    const nx = originalX + Math.cos(angle) * ejectDist; const ny = originalY + Math.sin(angle) * ejectDist;
-                    const piece = new Cell(nx, ny, massPerPiece, this.color, this.name, this.id, this.isBot);
-                    const massBasedSpeedBonus = Math.min(Math.sqrt(massPerPiece) * 0.3, MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS);
-                    const ejectSpeed = (CELL_SPLIT_EJECT_SPEED_BASE + massBasedSpeedBonus) / BASE_EJECT_SPEED_FACTOR_VIRUS;
-                    piece.ejectionVx = Math.cos(angle) * ejectSpeed; piece.ejectionVy = Math.sin(angle) * ejectSpeed;
-                    piece.ejectionTimer = CELL_SPLIT_EJECT_DURATION * VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER;
-                    newCells.push(piece);
-                }
-            } else if (originalMass > VIRUS_SPLIT_MASS_LOW_MAX && originalMass <= 300) {
-                let numSmallCells = Math.min(VIRUS_SPLIT_HIGH_MIN_PIECES, MAX_PLAYER_CELLS - this.cells.length - 1);
-                if (numSmallCells < 0) numSmallCells = 0;
-                let massForSmall = numSmallCells * minPieceForVirusSplit;
-                let mainBlobMassOld = originalMass - massForSmall;
-
-                if (mainBlobMassOld < minPieceForVirusSplit * 2 || (numSmallCells > 0 && mainBlobMassOld < massForSmall)) {
-                    mainBlobMassOld = originalMass; numSmallCells = 0;
-                }
-                if (mainBlobMassOld < minPieceForVirusSplit) {
-                    const reCell = new Cell(originalX, originalY, originalMass, this.color, this.name, this.id, this.isBot);
-                    this.cells.push(reCell); this.globalMergeCooldown = this.calculateGlobalMergeCooldown(this.getTotalMass()); return;
-                }
-                const mainBlobOld = new Cell(originalX, originalY, mainBlobMassOld, this.color, this.name, this.id, this.isBot);
-                mainBlobOld.ejectionTimer = 0;
-                newCells.push(mainBlobOld);
-
-                for (let i = 0; i < numSmallCells; i++) {
-                    if (this.cells.length + newCells.length >= MAX_PLAYER_CELLS) break;
-                    const angle = (i / numSmallCells) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-                    const ejectDist = mainBlobOld.radius > 0 ? mainBlobOld.radius * 0.6 : 5;
-                    const nx = originalX + Math.cos(angle) * ejectDist; const ny = originalY + Math.sin(angle) * ejectDist;
-                    const piece = new Cell(nx, ny, minPieceForVirusSplit, this.color, this.name, this.id, this.isBot);
-                    const massBasedSpeedBonus = Math.min(Math.sqrt(minPieceForVirusSplit) * 0.3, MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS);
-                    const ejectSpeed = (CELL_SPLIT_EJECT_SPEED_BASE * 1.0 + massBasedSpeedBonus) / BASE_EJECT_SPEED_FACTOR_VIRUS;
-                    piece.ejectionVx = Math.cos(angle) * ejectSpeed;
-                    piece.ejectionVy = Math.sin(angle) * ejectSpeed;
-                    piece.ejectionTimer = CELL_SPLIT_EJECT_DURATION * (VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER + 0.1);
-                    newCells.push(piece);
-                }
-            } else {
+            if (numPieces <= 0 || massPerPiece < minPieceForVirusSplit) {
                 const reCell = new Cell(originalX, originalY, originalMass, this.color, this.name, this.id, this.isBot);
-                this.cells.push(reCell);
-                this.globalMergeCooldown = this.calculateGlobalMergeCooldown(this.getTotalMass());
-                return;
+                this.cells.push(reCell); this.globalMergeCooldown = this.calculateGlobalMergeCooldown(this.getTotalMass()); return;
+            }
+
+            for (let i = 0; i < numPieces; i++) {
+                if (this.cells.length + newCells.length >= gameSettings.MAX_PLAYER_CELLS) break;
+                const angle = (i / numPieces) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+                const ejectDist = minPieceForVirusSplit * 0.3 + Math.random() * 10;
+                const nx = originalX + Math.cos(angle) * ejectDist;
+                const ny = originalY + Math.sin(angle) * ejectDist;
+                const piece = new Cell(nx, ny, massPerPiece, this.color, this.name, this.id, this.isBot);
+                const massBasedSpeedBonus = Math.min(Math.sqrt(massPerPiece) * 0.3, MAX_EJECT_SPEED_BONUS_FROM_MASS_VIRUS);
+                const ejectSpeed = (gameSettings.CELL_SPLIT_EJECT_SPEED_BASE + massBasedSpeedBonus) / BASE_EJECT_SPEED_FACTOR_VIRUS;
+                piece.ejectionVx = Math.cos(angle) * ejectSpeed; piece.ejectionVy = Math.sin(angle) * ejectSpeed;
+                piece.ejectionTimer = gameSettings.CELL_SPLIT_EJECT_DURATION * VIRUS_SPLIT_EJECT_DURATION_MULTIPLIER;
+                newCells.push(piece);
             }
             this.cells.push(...newCells);
             this.globalMergeCooldown = this.calculateGlobalMergeCooldown(this.getTotalMass());
         }
     }
-
     class Food extends Entity {
-        constructor(x, y) { super(x, y, FOOD_MASS, getRandomPastelColor()); this.radius = FOOD_RADIUS; this.targetRadius = this.radius; }
+        constructor(x, y) {
+            const mass = gameSettings.FOOD_MASS_MIN + Math.random() * (gameSettings.FOOD_MASS_MAX - gameSettings.FOOD_MASS_MIN);
+            super(x, y, Math.floor(mass), getRandomPastelColor());
+            this.radius = 4 + Math.sqrt(this.mass) * 4;
+            this.targetRadius = this.radius;
+        }
     }
-
     class Virus extends Entity {
-        constructor(x, y, mass = VIRUS_MASS_DEFAULT) {
-            super(x, y, mass, VIRUS_COLOR);
-            this.baseMass = VIRUS_MASS_DEFAULT;
+        constructor(x, y, initialMass = -1) {
+            const mass = initialMass === -1
+                ? Math.floor(gameSettings.VIRUS_MASS_MIN + Math.random() * (gameSettings.VIRUS_MASS_MAX - gameSettings.VIRUS_MASS_MIN))
+                : initialMass;
+            super(x, y, mass, gameSettings.VIRUS_COLOR);
+            this.baseMass = this.mass;
             this.ejectionVx = 0; this.ejectionVy = 0; this.ejectionTimer = 0;
             this.updateRadiusAndTarget(); this.radius = this.targetRadius;
         }
         updateRadiusAndTarget() { this.targetRadius = 4 + Math.sqrt(this.mass) * 4.5; }
         draw(ctx) {
-            const numOuterPoints = 12 + Math.floor(this.radius / 15);
+            const numOuterPoints = 20 + Math.floor(this.radius / 10);
             const outerR = this.radius;
-            const innerR = this.radius * (0.60 + Math.sin(Date.now() / 250) * 0.08);
-            const rotation = Date.now() / 2500;
+            const innerR = this.radius * 0.85;
+            const rotation = 0;
+
             ctx.beginPath();
             for (let i = 0; i < numOuterPoints; i++) {
                 let angleOuter = (i / numOuterPoints) * Math.PI * 2 + rotation;
-                let xOuter = this.x + Math.cos(angleOuter) * outerR; let yOuter = this.y + Math.sin(angleOuter) * outerR;
+                let xOuter = this.x + Math.cos(angleOuter) * outerR;
+                let yOuter = this.y + Math.sin(angleOuter) * outerR;
                 let angleInner = ((i + 0.5) / numOuterPoints) * Math.PI * 2 + rotation;
-                let xInner = this.x + Math.cos(angleInner) * innerR; let yInner = this.y + Math.sin(angleInner) * innerR;
+                let xInner = this.x + Math.cos(angleInner) * innerR;
+                let yInner = this.y + Math.sin(angleInner) * innerR;
                 if (i === 0) { ctx.moveTo(xOuter, yOuter); } else { ctx.lineTo(xOuter, yOuter); }
                 ctx.lineTo(xInner, yInner);
             }
             ctx.closePath();
             ctx.fillStyle = this.color; ctx.fill();
             ctx.strokeStyle = darkenColor(this.color, 30);
-            ctx.lineWidth = Math.max(1.5 / camera.zoom, this.radius / 30);
+            ctx.lineWidth = Math.max(3 / camera.zoom, this.radius / 20);
             ctx.stroke();
         }
-        onFed(spewedItem) {
-            this.mass += SPEWED_MASS_YIELD; this.updateRadiusAndTarget();
-            if (this.mass > VIRUS_FED_LIMIT && viruses.length < MAX_VIRUS_COUNT) {
-                this.mass = this.baseMass; this.updateRadiusAndTarget();
+        onFed(spewedItem, targetVirusArray = null, wcContext = null) { // Added targetVirusArray and wcContext
+            const currentGS = wcContext || gameSettings; // Use context-specific game settings
+            const currentViruses = targetVirusArray || viruses; // Use context-specific viruses array
+
+            this.mass += currentGS.SPEWED_MASS_YIELD; this.updateRadiusAndTarget();
+            if (this.mass > currentGS.VIRUS_FED_LIMIT && currentViruses.length < currentGS.MAX_VIRUS_COUNT) {
+                this.mass = this.baseMass; // Reset mass of original virus
+                this.updateRadiusAndTarget();
                 const angle = Math.atan2(spewedItem.y - this.y, spewedItem.x - this.x);
-                const shootAngle = angle + Math.PI;
+                const shootAngle = angle + Math.PI; // Shoot in opposite direction
                 const ejectDist = this.radius * 1.5;
-                const newVirusRadius = 4 + Math.sqrt(VIRUS_MASS_DEFAULT) * 4.5;
-                const spawnPos = findSafeSpawnPosition(newVirusRadius, "virus", {
-                    preferredX: this.x + Math.cos(shootAngle) * ejectDist * 2.5,
-                    preferredY: this.y + Math.sin(shootAngle) * ejectDist * 2.5,
-                });
-                const newVirus = new Virus(spawnPos.x, spawnPos.y);
-                const virusEjectSpeed = SPEWED_MASS_SPEED * 1.1;
+                const newVirusSpawnMass = Math.floor(currentGS.VIRUS_MASS_MIN + Math.random() * (currentGS.VIRUS_MASS_MAX - currentGS.VIRUS_MASS_MIN));
+                const newVirusRadius = 4 + Math.sqrt(newVirusSpawnMass) * 4.5;
+
+                // Use findSafeSpawnPosition with context if available, or simplified logic
+                let spawnPosX = this.x + Math.cos(shootAngle) * ejectDist * 2.5;
+                let spawnPosY = this.y + Math.sin(shootAngle) * ejectDist * 2.5;
+                if (wcContext) { // If in simulation or specific context
+                    spawnPosX = Math.max(newVirusRadius, Math.min(spawnPosX, wcContext.MAP_WIDTH - newVirusRadius));
+                    spawnPosY = Math.max(newVirusRadius, Math.min(spawnPosY, wcContext.MAP_HEIGHT - newVirusRadius));
+                } else { // Main game, use full findSafeSpawnPosition
+                    const spawnPosResult = findSafeSpawnPosition(newVirusRadius, "virus", { preferredX: spawnPosX, preferredY: spawnPosY });
+                    spawnPosX = spawnPosResult.x;
+                    spawnPosY = spawnPosResult.y;
+                }
+
+                const newVirus = new Virus(spawnPosX, spawnPosY, newVirusSpawnMass);
+                newVirus.id = getUniqueId(); // Ensure unique ID
+                const virusEjectSpeed = currentGS.SPEWED_MASS_SPEED * 1.1;
                 newVirus.ejectionVx = Math.cos(shootAngle) * virusEjectSpeed;
                 newVirus.ejectionVy = Math.sin(shootAngle) * virusEjectSpeed;
-                newVirus.ejectionTimer = CELL_SPLIT_EJECT_DURATION * 0.8;
-                viruses.push(newVirus);
+                newVirus.ejectionTimer = currentGS.CELL_SPLIT_EJECT_DURATION * 0.8;
+                currentViruses.push(newVirus);
             }
         }
     }
-
     class SpewedMass extends Entity {
         constructor(x, y, color, ownerId, vx, vy) {
-            super(x, y, SPEWED_MASS_YIELD, color);
-            this.radius = SPEWED_MASS_RADIUS; this.targetRadius = this.radius;
-            this.ownerId = ownerId; this.createdAt = Date.now();
-            this.vx = vx; this.vy = vy; this.lifeTimer = SPEWED_MASS_LIFESPAN;
+            super(x, y, gameSettings.SPEWED_MASS_YIELD, color); // Mass from global gameSettings for now
+            this.radius = 4 + Math.sqrt(this.mass) * 4;
+            this.targetRadius = this.radius;
+            this.ownerId = ownerId; this.createdAt = Date.now(); // Or use simulated time
+            this.vx = vx; this.vy = vy;
+            this.lifeTimer = gameSettings.SPEWED_MASS_LIFESPAN; // Global gameSettings
         }
         update(dt, dtFrameFactor) {
             this.x += this.vx * dtFrameFactor; this.y += this.vy * dtFrameFactor;
-            this.vx *= SPEWED_MASS_DAMPING; this.vy *= SPEWED_MASS_DAMPING;
+            this.vx *= gameSettings.SPEWED_MASS_DAMPING; this.vy *= gameSettings.SPEWED_MASS_DAMPING;
             if (Math.abs(this.vx) < 0.05) this.vx = 0; if (Math.abs(this.vy) < 0.05) this.vy = 0;
-            this.x = Math.max(this.radius, Math.min(this.x, MAP_WIDTH - this.radius));
-            this.y = Math.max(this.radius, Math.min(this.y, MAP_HEIGHT - this.radius));
+            // Bounds check against global gameSettings.MAP_WIDTH/HEIGHT. For simulation, this needs to be context-aware.
+            // If SimulationGame has different map size, this will be wrong.
+            // For now, assume SpewedMass uses main game's map size or this is handled by SimulationGame if necessary.
+            this.x = Math.max(this.radius, Math.min(this.x, gameSettings.MAP_WIDTH - this.radius));
+            this.y = Math.max(this.radius, Math.min(this.y, gameSettings.MAP_HEIGHT - this.radius));
             this.lifeTimer -= dt;
         }
     }
-    function newCellRadius(mass) {
-        return 4 + Math.sqrt(mass) * 4;
-    }
     function findSafeSpawnPosition(radius, entityType = "unknown", preferences = {}) {
         const MAX_TRIES = 30; let spawnX, spawnY;
-        let bestSpawnX = preferences.preferredX || Math.random() * (MAP_WIDTH - radius * 2) + radius;
-        let bestSpawnY = preferences.preferredY || Math.random() * (MAP_HEIGHT - radius * 2) + radius;
+        let bestSpawnX = preferences.preferredX || Math.random() * (gameSettings.MAP_WIDTH - radius * 2) + radius;
+        let bestSpawnY = preferences.preferredY || Math.random() * (gameSettings.MAP_HEIGHT - radius * 2) + radius;
         let foundSafe = false;
-        const allPlayerAndBotCells = [...(player && !isPlayerDead ? player.cells : []), ...bots.flatMap(b => b.cells)];
+        const playerCells = (player && player.cells) ? player.cells : [];
+        const allPlayerAndBotCells = [...playerCells, ...bots.flatMap(b => b.cells)];
+
         for (let i = 0; i < MAX_TRIES; i++) {
             if (i < 5 && preferences.preferredX !== undefined) {
                 spawnX = preferences.preferredX + (Math.random() - 0.5) * radius * (i + 1) * 2;
                 spawnY = preferences.preferredY + (Math.random() - 0.5) * radius * (i + 1) * 2;
             } else {
-                spawnX = Math.random() * (MAP_WIDTH - radius * 2) + radius;
-                spawnY = Math.random() * (MAP_HEIGHT - radius * 2) + radius;
+                spawnX = Math.random() * (gameSettings.MAP_WIDTH - radius * 2) + radius;
+                spawnY = Math.random() * (gameSettings.MAP_HEIGHT - radius * 2) + radius;
             }
-            spawnX = Math.max(radius, Math.min(spawnX, MAP_WIDTH - radius));
-            spawnY = Math.max(radius, Math.min(spawnY, MAP_HEIGHT - radius));
+            spawnX = Math.max(radius, Math.min(spawnX, gameSettings.MAP_WIDTH - radius));
+            spawnY = Math.max(radius, Math.min(spawnY, gameSettings.MAP_HEIGHT - radius));
             let isSafe = true;
             for (const cell of allPlayerAndBotCells) {
                 const distSq = (spawnX - cell.x) ** 2 + (spawnY - cell.y) ** 2;
@@ -795,7 +880,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (!isSafe) continue;
             if (entityType === "virus") {
-                for (const v of viruses) {
+                for (const v of viruses) { // Global viruses array
                     const distSq = (spawnX - v.x) ** 2 + (spawnY - v.y) ** 2;
                     if (distSq < (radius + v.radius + 20) ** 2) { isSafe = false; break; }
                 }
@@ -805,63 +890,327 @@ document.addEventListener('DOMContentLoaded', () => {
         return { x: bestSpawnX, y: bestSpawnY, foundSafe };
     }
 
+    function findControllerById(id) {
+        if (player && player.id === id) return player;
+        return bots.find(b => b.id === id);
+    }
+
+    function getAllPotentialSpectateTargets() {
+        const targets = [];
+        if (player && !isPlayerDead && player.cells.length > 0) {
+            targets.push(player);
+        }
+        bots.forEach(bot => {
+            if (bot.cells.length > 0) {
+                targets.push(bot);
+            }
+        });
+        return targets.sort((a, b) => b.getTotalMass() - a.getTotalMass());
+    }
+
+    function updateSpectateControlsUI() {
+        if (!isSpectating) {
+            spectateControls.style.display = 'none';
+            return;
+        }
+        spectateControls.style.display = 'block';
+        if (spectateMode === 'target' && spectateTargetId !== null) {
+            const target = findControllerById(spectateTargetId);
+            spectatingInfo.textContent = target ? `Spectating: ${target.name}` : "Spectating: Target Lost";
+            toggleFreeRoamButton.textContent = "Toggle Free Roam (Target)";
+        } else if (spectateMode === 'freeRoam') {
+            spectatingInfo.textContent = "Spectating: Free Roam (WASD to move)";
+            toggleFreeRoamButton.textContent = "Toggle Free Roam (Free)";
+        } else {
+            spectatingInfo.textContent = "Spectating: None";
+            toggleFreeRoamButton.textContent = "Toggle Free Roam";
+        }
+    }
+
+    function cycleSpectateTarget(direction) {
+        if (spectateMode !== 'target' && spectateMode !== 'initial') {
+            switchToTargetSpectate(null);
+            return;
+        }
+
+        const targets = getAllPotentialSpectateTargets();
+        if (targets.length === 0) {
+            switchToFreeRoamSpectate();
+            return;
+        }
+
+        let currentIndex = -1;
+        if (spectateTargetId !== null) {
+            currentIndex = targets.findIndex(t => t.id === spectateTargetId);
+        }
+
+        if (direction > 0) {
+            currentIndex++;
+            if (currentIndex >= targets.length) currentIndex = 0;
+        } else {
+            currentIndex--;
+            if (currentIndex < 0) currentIndex = targets.length - 1;
+        }
+
+        if (targets[currentIndex]) {
+            spectateTargetId = targets[currentIndex].id;
+            spectateMode = 'target';
+        } else {
+            switchToFreeRoamSpectate();
+        }
+        updateSpectateControlsUI();
+    }
+
+    function switchToTargetSpectate(targetIdToSet) {
+        const targetController = findControllerById(targetIdToSet);
+
+        if (targetController && targetController.cells.length > 0) {
+            spectateMode = 'target';
+            spectateTargetId = targetIdToSet;
+        } else {
+            const allTargets = getAllPotentialSpectateTargets();
+            if (allTargets.length > 0 && (!targetIdToSet || allTargets[0].id !== targetIdToSet)) {
+                spectateMode = 'target';
+                spectateTargetId = allTargets[0].id;
+            } else {
+                switchToFreeRoamSpectate();
+                return;
+            }
+        }
+        updateSpectateControlsUI();
+    }
+
+    function switchToFreeRoamSpectate() {
+        spectateMode = 'freeRoam';
+        spectateTargetId = null;
+        if (camera.x && camera.y) {
+            freeRoamCameraX = camera.x;
+            freeRoamCameraY = camera.y;
+        } else {
+            freeRoamCameraX = gameSettings.MAP_WIDTH / 2;
+            freeRoamCameraY = gameSettings.MAP_HEIGHT / 2;
+        }
+        camera.targetZoom = SPECTATE_FREE_ROAM_ZOOM;
+        camera.targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, camera.targetZoom));
+        updateSpectateControlsUI();
+    }
+
+
+    function startSpectating() {
+        isSpectating = true;
+        gameOverMessage.style.display = 'none';
+        spectateControls.style.display = 'block';
+
+        const targets = getAllPotentialSpectateTargets();
+        if (targets.length > 0) {
+            switchToTargetSpectate(targets[0].id);
+        } else {
+            switchToFreeRoamSpectate();
+        }
+    }
+
+    function stopSpectating() {
+        isSpectating = false;
+        spectateTargetId = null;
+        spectateControls.style.display = 'none';
+    }
+
+    function handleRespawn() {
+        stopSpectating();
+        isPlayerDead = false;
+        playerCanRespawnManually = false;
+        playerRespawnTimer = 0;
+
+        if (!player) {
+            const playerNameVal = playerNameInput.value || "Player";
+            player = new PlayerController(getUniqueId(), playerNameVal, gameSettings.PLAYER_START_MASS, '#007bff');
+        } else {
+            player.respawn();
+        }
+
+        if (player && player.cells.length > 0) {
+            const com = player.getCenterOfMassCell();
+            camera.x = com.x; camera.y = com.y;
+        } else {
+            camera.x = gameSettings.MAP_WIDTH / 2;
+            camera.y = gameSettings.MAP_HEIGHT / 2;
+        }
+        let respawnZoom = Math.max(0.2, Math.min(1.5, Math.max(canvas.width / gameSettings.MAP_WIDTH, canvas.height / gameSettings.MAP_HEIGHT) * 1.2));
+        camera.targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, respawnZoom));
+        gameOverMessage.style.display = 'none';
+        spectateButton.style.display = 'none';
+        respawnNowButton.style.display = 'none';
+    }
+
+    function handleFreeRoamCameraInput(dt) {
+        if (!isSpectating || spectateMode !== 'freeRoam') return;
+        const moveSpeed = (SPECTATE_CAMERA_SPEED / camera.zoom) * (dt / 1000);
+
+        if (keysPressed['w'] || keysPressed['W'] || keysPressed['ArrowUp']) freeRoamCameraY -= moveSpeed;
+        if (keysPressed['s'] || keysPressed['S'] || keysPressed['ArrowDown']) freeRoamCameraY += moveSpeed;
+        if (keysPressed['a'] || keysPressed['A'] || keysPressed['ArrowLeft']) freeRoamCameraX -= moveSpeed;
+        if (keysPressed['d'] || keysPressed['D'] || keysPressed['ArrowRight']) freeRoamCameraX += moveSpeed;
+
+        const margin = 50 / camera.zoom;
+        freeRoamCameraX = Math.max(margin, Math.min(freeRoamCameraX, gameSettings.MAP_WIDTH - margin));
+        freeRoamCameraY = Math.max(margin, Math.min(freeRoamCameraY, gameSettings.MAP_HEIGHT - margin));
+    }
+
     function initGame() {
-        uniqueIdCounter = 0; isPlayerDead = false; playerRespawnTimer = 0;
+        uniqueIdCounter = 0;
+
+        isSpectating = false;
+        spectateTargetId = null;
+        spectateMode = 'target';
+        freeRoamCameraX = 0;
+        freeRoamCameraY = 0;
+        Object.keys(keysPressed).forEach(key => keysPressed[key] = false);
+        spectateControls.style.display = 'none';
+
+        if (gameModeSelect.value === 'custom') loadSettingsFromCustomInputs();
+
+        currentWorldConstantsForBots = { // This is for the main game bots
+            MAP_WIDTH: gameSettings.MAP_WIDTH, MAP_HEIGHT: gameSettings.MAP_HEIGHT,
+            MIN_SPEW_MASS: gameSettings.MIN_SPEW_MASS_TOTAL,
+            CELL_MIN_MASS_TO_SPLIT_FROM: gameSettings.CELL_MIN_MASS_TO_SPLIT_FROM,
+            MIN_MASS_PER_SPLIT_PIECE: gameSettings.MIN_MASS_PER_SPLIT_PIECE,
+            MAX_PLAYER_CELLS: gameSettings.MAX_PLAYER_CELLS,
+            VIRUS_MASS_ABSORBED: gameSettings.VIRUS_MASS_MAX,
+            VIRUS_EAT_MASS_MULTIPLIER: gameSettings.VIRUS_EAT_MASS_MULTIPLIER,
+            PLAYER_SPLITS_ON_VIRUS_EAT: gameSettings.PLAYER_SPLITS_ON_VIRUS_EAT,
+            VIRUS_MAX_SPLIT: gameSettings.VIRUS_SPLIT_LOW_MAX_PIECES,
+            EAT_MASS_RATIO: gameSettings.EAT_MASS_RATIO,
+            PLAYER_MAX_SPEED: gameSettings.PLAYER_BASE_SPEED,
+            PLAYER_MIN_SPEED: gameSettings.PLAYER_MIN_SPEED_CAP,
+            EAT_MASS_RATIO_FOR_SPLIT: gameSettings.EAT_MASS_RATIO * (gameSettings.AGGRESSIVE_BOT_SPLIT_EAT_FACTOR || 1.1),
+            CELL_RADIUS_MASS_FACTOR: 4,
+            GAME_GLOBAL_MERGE_COOLDOWN_MAX_MS: gameSettings.GLOBAL_MERGE_COOLDOWN_MAX_MS,
+        };
         const playerNameVal = playerNameInput.value || "Player";
         const numBotsVal = parseInt(numBotsInput.value) || 0;
         currentGameBotAiType = botTypeSelect.value;
-        player = new PlayerController(getUniqueId(), playerNameVal, PLAYER_START_MASS, '#007bff');
+
+        player = null;
+        isPlayerDead = false;
+        playerRespawnTimer = 0;
+        playerCanRespawnManually = false;
+
         bots = [];
         for (let i = 0; i < numBotsVal; i++) {
-            bots.push(new PlayerController(getUniqueId(), `Bot ${i + 1}`, BOT_START_MASS, getRandomBotColor(), true, currentGameBotAiType));
+            // Pass currentWorldConstantsForBots for main game bots, and empty AI params (AggressiveAI will use its defaults)
+            bots.push(new PlayerController(getUniqueId(), `Bot ${i + 1}`, gameSettings.BOT_START_MASS, getRandomBotColor(), true, currentGameBotAiType, currentWorldConstantsForBots, {}));
         }
         food = []; viruses = []; spewedMasses = [];
         spawnInitialEntities();
+
         lastDecayTime = Date.now(); lastFoodSpawnTime = Date.now(); lastVirusSpawnTime = Date.now(); lastLeaderboardUpdateTime = Date.now();
-        const com = player.getCenterOfMassCell(); camera.x = com.x; camera.y = com.y;
-        startScreen.style.display = 'none'; gameContainer.style.display = 'block'; gameOverMessage.style.display = 'none';
+
+        let initialZoom = Math.max(canvas.width / gameSettings.MAP_WIDTH, canvas.height / gameSettings.MAP_HEIGHT) * 1.2;
+        initialZoom = Math.max(0.2, Math.min(1.5, initialZoom));
+
+        if (startAsSpectatorCheckbox.checked) {
+            isSpectating = true;
+            isPlayerDead = true;
+            playerCanRespawnManually = true;
+            camera.x = gameSettings.MAP_WIDTH / 2;
+            camera.y = gameSettings.MAP_HEIGHT / 2;
+            startSpectating();
+            if (spectateMode === 'freeRoam') {
+                camera.targetZoom = SPECTATE_FREE_ROAM_ZOOM;
+            } else {
+                camera.targetZoom = initialZoom;
+            }
+            camera.zoom = camera.targetZoom;
+        } else {
+            isSpectating = false;
+            isPlayerDead = false;
+            playerCanRespawnManually = false;
+            player = new PlayerController(getUniqueId(), playerNameVal, gameSettings.PLAYER_START_MASS, '#007bff');
+            if (player.cells.length > 0) {
+                const com = player.getCenterOfMassCell();
+                camera.x = com.x; camera.y = com.y;
+            } else {
+                camera.x = gameSettings.MAP_WIDTH / 2;
+                camera.y = gameSettings.MAP_HEIGHT / 2;
+            }
+            camera.targetZoom = initialZoom;
+            camera.zoom = camera.targetZoom;
+        }
+        camera.targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, camera.targetZoom));
+        camera.zoom = camera.targetZoom;
+
+        startScreen.style.display = 'none'; gameContainer.style.display = 'block';
+        gameOverMessage.style.display = 'none';
         resizeCanvas();
         if (gameLoopId) cancelAnimationFrame(gameLoopId);
         lastFrameTime = performance.now();
         gameLoop(lastFrameTime);
     }
     function spawnInitialEntities() {
-        for (let i = 0; i < MAX_FOOD_COUNT / 1.5; i++) spawnFood();
-        for (let i = 0; i < MAX_VIRUS_COUNT / 2; i++) spawnVirus();
+        for (let i = 0; i < gameSettings.MAX_FOOD_COUNT / 1.5; i++) spawnFood();
+        for (let i = 0; i < gameSettings.MAX_VIRUS_COUNT / 2; i++) spawnVirus();
     }
     function spawnFood() {
-        if (food.length < MAX_FOOD_COUNT) {
-            const spawnPos = findSafeSpawnPosition(FOOD_RADIUS * 2, "food"); food.push(new Food(spawnPos.x, spawnPos.y));
+        if (food.length < gameSettings.MAX_FOOD_COUNT) {
+            const tempFoodMass = gameSettings.FOOD_MASS_MIN + Math.random() * (gameSettings.FOOD_MASS_MAX - gameSettings.FOOD_MASS_MIN);
+            const foodRadius = 4 + Math.sqrt(tempFoodMass) * 4;
+            const spawnPos = findSafeSpawnPosition(foodRadius * 2, "food"); food.push(new Food(spawnPos.x, spawnPos.y));
         }
     }
     function spawnVirus() {
-        if (viruses.length < MAX_VIRUS_COUNT) {
-            const virusRadius = 4 + Math.sqrt(VIRUS_MASS_DEFAULT) * 4.5;
-            const spawnPos = findSafeSpawnPosition(virusRadius * 1.2, "virus"); viruses.push(new Virus(spawnPos.x, spawnPos.y));
+        if (viruses.length < gameSettings.MAX_VIRUS_COUNT) {
+            const tempVirusMass = gameSettings.VIRUS_MASS_MIN + Math.random() * (gameSettings.VIRUS_MASS_MAX - gameSettings.VIRUS_MASS_MIN);
+            const virusRadius = 4 + Math.sqrt(tempVirusMass) * 4.5;
+            const spawnPos = findSafeSpawnPosition(virusRadius * 1.2, "virus"); viruses.push(new Virus(spawnPos.x, spawnPos.y, Math.floor(tempVirusMass)));
         }
     }
 
     function updateCamera() {
-        let targetX, targetY, targetMass;
-        if (isPlayerDead || !player || player.cells.length === 0) {
-            targetX = MAP_WIDTH / 2; targetY = MAP_HEIGHT / 2; targetMass = PLAYER_START_MASS;
+        let targetX, targetY;
+        const ZOOM_INTERPOLATION_FACTOR = 0.08;
+
+        if (isSpectating) {
+            if (spectateMode === 'target' && spectateTargetId !== null) {
+                const targetController = findControllerById(spectateTargetId);
+                if (targetController && targetController.cells.length > 0) {
+                    const com = targetController.getCenterOfMassCell();
+                    targetX = com.x; targetY = com.y;
+                } else {
+                    switchToFreeRoamSpectate();
+                    targetX = freeRoamCameraX; targetY = freeRoamCameraY;
+                }
+            } else {
+                targetX = freeRoamCameraX; targetY = freeRoamCameraY;
+            }
+        } else if (player && !isPlayerDead && player.cells.length > 0) {
+            const com = player.getCenterOfMassCell();
+            targetX = com.x; targetY = com.y;
         } else {
-            const com = player.getCenterOfMassCell(); targetX = com.x; targetY = com.y; targetMass = com.mass;
+            targetX = camera.x || gameSettings.MAP_WIDTH / 2;
+            targetY = camera.y || gameSettings.MAP_HEIGHT / 2;
         }
-        camera.x += (targetX - camera.x) * 0.1; camera.y += (targetY - camera.y) * 0.1;
-        const baseZoom = Math.max(canvas.width / MAP_WIDTH, canvas.height / MAP_HEIGHT) * 0.9;
-        const massFactor = Math.max(0.1, 1.6 - Math.log10(targetMass + 1) * 0.35);
-        const desiredZoom = Math.max(baseZoom * 0.3, massFactor);
-        camera.zoom += (desiredZoom - camera.zoom) * 0.05;
-        camera.zoom = Math.max(0.05, Math.min(camera.zoom, 2.5));
+
+        camera.x += (targetX - camera.x) * 0.1;
+        camera.y += (targetY - camera.y) * 0.1;
+        camera.zoom += (camera.targetZoom - camera.zoom) * ZOOM_INTERPOLATION_FACTOR;
+
+        if (Math.abs(camera.targetZoom - camera.zoom) < 0.001) {
+            camera.zoom = camera.targetZoom;
+        }
+        camera.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, camera.zoom));
     }
+
     function updateWorldMouseCoords() {
         worldMouseX = (screenMouseX - canvas.width / 2) / camera.zoom + camera.x;
         worldMouseY = (screenMouseY - canvas.height / 2) / camera.zoom + camera.y;
     }
+    function checkCollisions() { // For main game loop
+        const allControllers = [];
+        if (player && !isPlayerDead && !isSpectating) {
+            allControllers.push(player);
+        }
+        allControllers.push(...bots.filter(c => c && c.cells.length > 0));
 
-    function checkCollisions() {
-        const allControllers = [...(player && !isPlayerDead ? [player] : []), ...bots].filter(c => c && c.cells.length > 0);
         allControllers.forEach(controller => {
             for (let i = controller.cells.length - 1; i >= 0; i--) {
                 if (i >= controller.cells.length) continue;
@@ -889,7 +1238,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const v = viruses[j]; if (!v) continue;
                     if (!controller.cells.includes(cell) || cell.mass <= 0) { virusEatenAndCellSplit = true; break; }
 
-                    if (isColliding(cell, v, "virus") && cell.mass >= v.mass * VIRUS_EAT_MASS_MULTIPLIER) {
+                    if (isColliding(cell, v, "virus") && cell.mass >= v.mass * gameSettings.VIRUS_EAT_MASS_MULTIPLIER) {
                         cell.mass += v.mass;
                         cell.updateRadiusAndTarget();
                         viruses.splice(j, 1);
@@ -904,7 +1253,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const sm = spewedMasses[i]; if (!sm) continue;
             for (let j = viruses.length - 1; j >= 0; j--) {
                 const v = viruses[j]; if (!v) continue;
-                if (isColliding(sm, v, "virus_feed")) { v.onFed(sm); spewedMasses.splice(i, 1); break; }
+                if (isColliding(sm, v, "virus_feed")) {
+                    v.onFed(sm, viruses, gameSettings); // Pass main game's viruses array and gameSettings
+                    spewedMasses.splice(i, 1); break;
+                }
             }
         }
         const allActivePlayerCellsSnapshot = [];
@@ -913,38 +1265,31 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 0; i < allActivePlayerCellsSnapshot.length; i++) {
             const cellA = allActivePlayerCellsSnapshot[i];
             if (!cellA || cellA.mass <= 0) continue;
-
             for (let j = i + 1; j < allActivePlayerCellsSnapshot.length; j++) {
                 const cellB = allActivePlayerCellsSnapshot[j];
                 if (!cellB || cellB.mass <= 0) continue;
-
                 if (cellA.ownerId === cellB.ownerId) continue;
 
                 if (isColliding(cellA, cellB, "cell")) {
                     let eater, eatee;
-                    if (cellA.mass >= cellB.mass * EAT_MASS_RATIO && cellA.mass > cellB.mass + Math.max(1, MIN_MASS_PER_SPLIT_PIECE * 0.1)) {
+                    if (cellA.mass >= cellB.mass * gameSettings.EAT_MASS_RATIO && cellA.mass > cellB.mass + Math.max(1, gameSettings.MIN_MASS_PER_SPLIT_PIECE * 0.1)) {
                         eater = cellA; eatee = cellB;
-                    } else if (cellB.mass >= cellA.mass * EAT_MASS_RATIO && cellB.mass > cellA.mass + Math.max(1, MIN_MASS_PER_SPLIT_PIECE * 0.1)) {
+                    } else if (cellB.mass >= cellA.mass * gameSettings.EAT_MASS_RATIO && cellB.mass > cellA.mass + Math.max(1, gameSettings.MIN_MASS_PER_SPLIT_PIECE * 0.1)) {
                         eater = cellB; eatee = cellA;
                     }
                     if (eater) {
-                        eater.mass += eatee.mass;
-                        eatee.mass = 0;
+                        eater.mass += eatee.mass; eatee.mass = 0;
                         eater.updateRadiusAndTarget();
-
                         const ownerOfEatee = allControllers.find(c => c.id === eatee.ownerId);
                         if (ownerOfEatee) { ownerOfEatee.cells = ownerOfEatee.cells.filter(c => c.id !== eatee.id); }
-
                         const eateeIndexInSnapshot = allActivePlayerCellsSnapshot.findIndex(c => c && c.id === eatee.id);
-                        if (eateeIndexInSnapshot !== -1) {
-                            allActivePlayerCellsSnapshot[eateeIndexInSnapshot] = null;
-                        }
+                        if (eateeIndexInSnapshot !== -1) allActivePlayerCellsSnapshot[eateeIndexInSnapshot] = null;
                         if (eater === cellB) break;
                     }
                 }
             }
         }
-        allControllers.forEach(c => { c.cells = c.cells.filter(cell => cell.mass > MIN_MASS_PER_SPLIT_PIECE / 2); });
+        allControllers.forEach(c => { c.cells = c.cells.filter(cell => cell.mass >= gameSettings.MIN_MASS_PER_SPLIT_PIECE / 2); });
     }
     function isColliding(obj1, obj2, type) {
         if (!obj1 || !obj2 || obj1.radius === undefined || obj2.radius === undefined) return false;
@@ -961,16 +1306,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     function updateHUD() {
-        if (!player) return;
-        playerNameDisplay.textContent = player.name;
-        const playerState = (isPlayerDead || player.cells.length === 0);
-        playerMassDisplay.textContent = playerState ? "0 (Respawning...)" : Math.floor(player.getTotalMass());
-        playerCellCountDisplay.textContent = playerState ? "0" : player.cells.length;
+        let nameToShow = "-";
+        let massToShow = "0";
+        let cellsToShow = "0";
+        let currentGlobalMergeCooldown = 0;
+        let targetForHUD = null;
+        let isActualPlayerActive = player && !isPlayerDead && !isSpectating;
+
+        if (isSpectating && spectateMode === 'target' && spectateTargetId !== null) {
+            targetForHUD = findControllerById(spectateTargetId);
+        } else if (isActualPlayerActive) {
+            targetForHUD = player;
+        }
+
+        if (targetForHUD) {
+            nameToShow = targetForHUD.name;
+            massToShow = Math.floor(targetForHUD.getTotalMass());
+            cellsToShow = targetForHUD.cells.length;
+            currentGlobalMergeCooldown = targetForHUD.globalMergeCooldown;
+        } else if (isSpectating && spectateMode === 'freeRoam') {
+            nameToShow = "Free Roam";
+        } else if (isPlayerDead) {
+            nameToShow = player ? player.name : (playerNameInput.value || "Player Spectator");
+            massToShow = "0";
+            if (player) massToShow += " (Dead)";
+            cellsToShow = "0";
+        } else if (!player && !isSpectating) {
+            return;
+        }
+
+        playerNameDisplay.textContent = nameToShow;
+        playerMassDisplay.textContent = massToShow;
+        playerCellCountDisplay.textContent = cellsToShow;
 
         if (playerGlobalMergeCooldownDisplay) {
-            if (!isPlayerDead && player.cells.length > 1) {
-                if (player.globalMergeCooldown > 0) {
-                    playerGlobalMergeCooldownDisplay.textContent = `Merge CD: ${(player.globalMergeCooldown / 1000).toFixed(1)}s`;
+            if (targetForHUD && targetForHUD.cells.length > 1) {
+                if (currentGlobalMergeCooldown > 0) {
+                    playerGlobalMergeCooldownDisplay.textContent = `Merge CD: ${(currentGlobalMergeCooldown / 1000).toFixed(1)}s`;
                     playerGlobalMergeCooldownDisplay.style.display = 'block';
                 } else {
                     playerGlobalMergeCooldownDisplay.textContent = 'Merge Ready!';
@@ -984,15 +1356,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = Date.now();
         if (now - lastLeaderboardUpdateTime > 1000) {
             lastLeaderboardUpdateTime = now;
-            const leaderSource = [...(player && !isPlayerDead ? [player] : []), ...bots];
+            const leaderSource = [];
+            if (player && !isPlayerDead && !isSpectating) {
+                leaderSource.push(player);
+            }
+            leaderSource.push(...bots);
+
             const allPlayersForLeaderboard = leaderSource
                 .filter(p => p && p.cells.length > 0 && p.getTotalMass() > 0)
                 .map(p => ({ name: p.name, mass: Math.floor(p.getTotalMass()), id: p.id }))
                 .sort((a, b) => b.mass - a.mass).slice(0, 10);
             leaderboardList.innerHTML = '';
-            allPlayersForLeaderboard.forEach(p => {
-                const li = document.createElement('li'); li.textContent = `${p.name}: ${p.mass}`;
-                if (player && p.id === player.id && !isPlayerDead) { li.style.fontWeight = 'bold'; li.style.color = player.color; }
+            allPlayersForLeaderboard.forEach(pLeader => {
+                const li = document.createElement('li');
+                li.textContent = `${pLeader.name}: ${pLeader.mass}`;
+                li.dataset.id = pLeader.id;
+                li.style.cursor = 'pointer';
+
+                if (player && pLeader.id === player.id && !isPlayerDead && !isSpectating) {
+                    li.style.fontWeight = 'bold'; li.style.color = player.color;
+                } else if (isSpectating && spectateTargetId === pLeader.id) {
+                    li.style.fontWeight = 'bold'; li.style.color = '#ff8c00';
+                }
                 leaderboardList.appendChild(li);
             });
         }
@@ -1003,32 +1388,40 @@ document.addEventListener('DOMContentLoaded', () => {
         const viewLeft = camera.x - (canvas.width / 2) / camera.zoom; const viewTop = camera.y - (canvas.height / 2) / camera.zoom;
         const viewRight = camera.x + (canvas.width / 2) / camera.zoom; const viewBottom = camera.y + (canvas.height / 2) / camera.zoom;
         ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1 / camera.zoom;
-        const startGridX = Math.floor(viewLeft / GRID_SIZE) * GRID_SIZE; const endGridX = Math.ceil(viewRight / GRID_SIZE) * GRID_SIZE;
-        const startGridY = Math.floor(viewTop / GRID_SIZE) * GRID_SIZE; const endGridY = Math.ceil(viewBottom / GRID_SIZE) * GRID_SIZE;
-        for (let x = startGridX; x < endGridX; x += GRID_SIZE) {
-            if (x < 0 || x > MAP_WIDTH) continue;
-            ctx.beginPath(); ctx.moveTo(x, Math.max(0, viewTop)); ctx.lineTo(x, Math.min(MAP_HEIGHT, viewBottom)); ctx.stroke();
+        const startGridX = Math.floor(viewLeft / gameSettings.GRID_SIZE) * gameSettings.GRID_SIZE; const endGridX = Math.ceil(viewRight / gameSettings.GRID_SIZE) * gameSettings.GRID_SIZE;
+        const startGridY = Math.floor(viewTop / gameSettings.GRID_SIZE) * gameSettings.GRID_SIZE; const endGridY = Math.ceil(viewBottom / gameSettings.GRID_SIZE) * gameSettings.GRID_SIZE;
+        for (let x = startGridX; x < endGridX; x += gameSettings.GRID_SIZE) {
+            if (x < 0 || x > gameSettings.MAP_WIDTH) continue;
+            ctx.beginPath(); ctx.moveTo(x, Math.max(0, viewTop)); ctx.lineTo(x, Math.min(gameSettings.MAP_HEIGHT, viewBottom)); ctx.stroke();
         }
-        for (let y = startGridY; y < endGridY; y += GRID_SIZE) {
-            if (y < 0 || y > MAP_HEIGHT) continue;
-            ctx.beginPath(); ctx.moveTo(Math.max(0, viewLeft), y); ctx.lineTo(Math.min(MAP_WIDTH, viewRight), y); ctx.stroke();
+        for (let y = startGridY; y < endGridY; y += gameSettings.GRID_SIZE) {
+            if (y < 0 || y > gameSettings.MAP_HEIGHT) continue;
+            ctx.beginPath(); ctx.moveTo(Math.max(0, viewLeft), y); ctx.lineTo(Math.min(gameSettings.MAP_WIDTH, viewRight), y); ctx.stroke();
         }
-        ctx.strokeStyle = '#333'; ctx.lineWidth = Math.max(2, 10 / camera.zoom); ctx.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = Math.max(4 / camera.zoom, 2);
+        ctx.strokeRect(0, 0, gameSettings.MAP_WIDTH, gameSettings.MAP_HEIGHT);
         ctx.restore();
     }
 
+    let lastFrameTime = 0;
     function gameLoop(timestamp) {
         const dt = Math.min(50, timestamp - lastFrameTime);
         const dtFrameFactor = dt / (1000 / 60);
         lastFrameTime = timestamp;
-        updateWorldMouseCoords();
+
+        if (!isSpectating || spectateMode === 'target') {
+            updateWorldMouseCoords();
+        }
+
         const now = Date.now();
-        if (now - lastDecayTime > MASS_DECAY_INTERVAL) {
-            if (player && !isPlayerDead) player.applyMassDecay();
+        if (now - lastDecayTime > gameSettings.MASS_DECAY_INTERVAL) {
+            if (player && !isPlayerDead && !isSpectating) player.applyMassDecay();
             bots.forEach(bot => bot.applyMassDecay()); lastDecayTime = now;
         }
-        if (now - lastFoodSpawnTime > FOOD_SPAWN_INTERVAL) { spawnFood(); lastFoodSpawnTime = now; }
-        if (now - lastVirusSpawnTime > VIRUS_SPAWN_INTERVAL) { spawnVirus(); lastVirusSpawnTime = now; }
+        if (now - lastFoodSpawnTime > gameSettings.FOOD_SPAWN_INTERVAL) { spawnFood(); lastFoodSpawnTime = now; }
+        if (now - lastVirusSpawnTime > gameSettings.VIRUS_SPAWN_INTERVAL) { spawnVirus(); lastVirusSpawnTime = now; }
+
         for (let i = spewedMasses.length - 1; i >= 0; i--) {
             spewedMasses[i].update(dt, dtFrameFactor);
             if (spewedMasses[i].lifeTimer <= 0) spewedMasses.splice(i, 1);
@@ -1037,53 +1430,196 @@ document.addEventListener('DOMContentLoaded', () => {
             v.animateRadiusLogic(dtFrameFactor);
             if (v.ejectionTimer > 0) {
                 v.x += v.ejectionVx * dtFrameFactor; v.y += v.ejectionVy * dtFrameFactor; v.ejectionTimer -= dt;
-                v.ejectionVx *= CELL_EJECTION_DAMPING; v.ejectionVy *= CELL_EJECTION_DAMPING;
-                v.x = Math.max(v.radius, Math.min(v.x, MAP_WIDTH - v.radius)); v.y = Math.max(v.radius, Math.min(v.y, MAP_HEIGHT - v.radius));
+                v.ejectionVx *= gameSettings.CELL_EJECTION_DAMPING;
+                v.ejectionVy *= gameSettings.CELL_EJECTION_DAMPING;
+                v.x = Math.max(v.radius, Math.min(v.x, gameSettings.MAP_WIDTH - v.radius));
+                v.y = Math.max(v.radius, Math.min(v.y, gameSettings.MAP_HEIGHT - v.radius));
                 if (v.ejectionTimer <= 0 || (Math.abs(v.ejectionVx) < 0.1 && Math.abs(v.ejectionVy) < 0.1)) {
                     v.ejectionTimer = 0; v.ejectionVx = 0; v.ejectionVy = 0;
                 }
             }
         });
-        if (player && !isPlayerDead) {
+
+        if (player && !isPlayerDead && !isSpectating) {
             player.update(dt, dtFrameFactor);
             if (player.cells.length === 0 && player.getTotalMass() === 0) {
-                isPlayerDead = true; playerRespawnTimer = PLAYER_RESPAWN_DELAY;
-                gameOverMessage.querySelector('h2').textContent = "You were eaten!"; gameOverMessage.style.display = 'block';
+                isPlayerDead = true;
+                playerRespawnTimer = gameSettings.PLAYER_RESPAWN_DELAY;
+                playerCanRespawnManually = false;
+                gameOverText.textContent = "You were eaten!";
+                gameOverMessage.style.display = 'block';
+                spectateButton.style.display = 'inline-block';
+                respawnNowButton.style.display = 'none';
+                respawnTimerText.textContent = `Respawn in: ${(playerRespawnTimer / 1000).toFixed(1)}s`;
             }
-        } else if (isPlayerDead) {
+        } else if (player && isPlayerDead && !isSpectating) {
             playerRespawnTimer -= dt;
+            if (playerRespawnTimer <= 0) {
+                playerRespawnTimer = 0;
+                playerCanRespawnManually = true;
+                respawnTimerText.textContent = "Ready to Respawn!";
+                respawnNowButton.style.display = 'inline-block';
+            } else {
+                respawnTimerText.textContent = `Respawn in: ${(playerRespawnTimer / 1000).toFixed(1)}s`;
+            }
         }
+
+        if (isSpectating && spectateMode === 'freeRoam') {
+            handleFreeRoamCameraInput(dt);
+        }
+
         bots.forEach(bot => bot.update(dt, dtFrameFactor));
         for (let i = bots.length - 1; i >= 0; i--) {
             if (bots[i].cells.length === 0 && bots[i].getTotalMass() === 0) {
+                if (isSpectating && spectateTargetId === bots[i].id) {
+                    switchToFreeRoamSpectate();
+                }
                 const deadBot = bots[i];
-                bots[i] = new PlayerController(deadBot.id, deadBot.name, BOT_START_MASS, getRandomBotColor(), true, currentGameBotAiType);
+                // Recreate bot with correct parameters
+                bots[i] = new PlayerController(deadBot.id, deadBot.name, gameSettings.BOT_START_MASS, getRandomBotColor(), true, currentGameBotAiType, currentWorldConstantsForBots, {});
             }
         }
-        checkCollisions(); updateCamera(); updateHUD();
+
+        checkCollisions();
+        updateCamera();
+        updateHUD();
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawGridAndBorders();
         ctx.save();
         ctx.translate(canvas.width / 2, canvas.height / 2); ctx.scale(camera.zoom, camera.zoom); ctx.translate(-camera.x, -camera.y);
-        const renderables = [...food, ...spewedMasses, ...viruses, ...(player && !isPlayerDead ? player.cells : []), ...bots.flatMap(b => b.cells)];
+
+        const renderables = [
+            ...food,
+            ...spewedMasses,
+            ...viruses,
+            ...(player && player.cells ? player.cells : []),
+            ...bots.flatMap(b => b.cells)
+        ];
         renderables.sort((a, b) => a.mass - b.mass);
         renderables.forEach(e => e.draw(ctx));
         ctx.restore();
+
         gameLoopId = requestAnimationFrame(gameLoop);
     }
-    let lastFrameTime = 0;
 
     startGameButton.addEventListener('click', initGame);
+
     restartGameButton.addEventListener('click', () => {
         if (gameLoopId) cancelAnimationFrame(gameLoopId);
-        gameOverMessage.style.display = 'none'; startScreen.style.display = 'block'; gameContainer.style.display = 'none';
+        stopSpectating();
+        gameOverMessage.style.display = 'none';
+        startScreen.style.display = 'block';
+        gameContainer.style.display = 'none';
     });
+
+    spectateButton.addEventListener('click', () => {
+        startSpectating();
+    });
+
+    respawnNowButton.addEventListener('click', () => {
+        if (playerCanRespawnManually) {
+            handleRespawn();
+        }
+    });
+
+    prevSpectateTargetButton.addEventListener('click', () => cycleSpectateTarget(-1));
+    nextSpectateTargetButton.addEventListener('click', () => cycleSpectateTarget(1));
+    toggleFreeRoamButton.addEventListener('click', () => {
+        if (spectateMode === 'target') {
+            switchToFreeRoamSpectate();
+        } else {
+            switchToTargetSpectate(null);
+        }
+    });
+    spectateRespawnButton.addEventListener('click', () => {
+        handleRespawn();
+    });
+    spectateBackToMenuButton.addEventListener('click', () => {
+        if (gameLoopId) cancelAnimationFrame(gameLoopId);
+        stopSpectating();
+        gameOverMessage.style.display = 'none';
+        startScreen.style.display = 'block';
+        gameContainer.style.display = 'none';
+    });
+
+    leaderboardList.addEventListener('click', (e) => {
+        if (!isSpectating && !isPlayerDead) return;
+
+        const listItem = e.target.closest('li[data-id]');
+        if (listItem && listItem.dataset.id) {
+            const targetId = parseInt(listItem.dataset.id);
+            const controllerToSpectate = findControllerById(targetId);
+            if (controllerToSpectate && controllerToSpectate.cells.length > 0) {
+                if (!isSpectating) {
+                    startSpectating();
+                }
+                switchToTargetSpectate(targetId);
+            } else if (controllerToSpectate) {
+                if (!isSpectating) startSpectating();
+                switchToFreeRoamSpectate();
+            }
+        }
+    });
+
+    canvas.addEventListener('click', (e) => {
+        if (!isSpectating) return;
+
+        const clickWorldX = (screenMouseX - canvas.width / 2) / camera.zoom + camera.x;
+        const clickWorldY = (screenMouseY - canvas.height / 2) / camera.zoom + camera.y;
+
+        const allDrawableCells = [
+            ...(player && player.cells ? player.cells : []),
+            ...bots.flatMap(b => b.cells)
+        ].filter(cell => cell && cell.mass > 0);
+
+        allDrawableCells.sort((a, b) => b.mass - a.mass);
+
+        for (const cell of allDrawableCells) {
+            const distSq = (clickWorldX - cell.x) ** 2 + (clickWorldY - cell.y) ** 2;
+            if (distSq < cell.radius * cell.radius) {
+                if (cell.ownerId !== spectateTargetId || spectateMode === 'freeRoam') {
+                    switchToTargetSpectate(cell.ownerId);
+                }
+                return;
+            }
+        }
+    });
+
     canvas.addEventListener('mousemove', (e) => { screenMouseX = e.clientX; screenMouseY = e.clientY; });
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const zoomDirection = e.deltaY > 0 ? -1 : 1;
+        let newTargetZoom = camera.targetZoom * (1 + zoomDirection * ZOOM_SPEED_FACTOR);
+        camera.targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newTargetZoom));
+    });
+
+
     window.addEventListener('keydown', (e) => {
-        if (!player || isPlayerDead || player.cells.length === 0) return;
-        if (e.key === 'w' || e.key === 'W') player.initiateSpew();
+        if (isSpectating && spectateMode === 'freeRoam') {
+            keysPressed[e.key.toLowerCase()] = true;
+            if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) {
+                e.preventDefault();
+            }
+        }
+
+        if (!player || isPlayerDead || isSpectating) {
+            if (e.key === 'w' || e.key === 'W' || e.code === 'Space') {
+                e.preventDefault();
+            }
+            return;
+        }
+
+        if (e.key === 'w' || e.key === 'W') player.initiateSpew(); // Uses global spewedMasses
         if (e.code === 'Space') { e.preventDefault(); player.initiateSplit(); }
     });
+
+    window.addEventListener('keyup', (e) => {
+        if (isSpectating && spectateMode === 'freeRoam') {
+            keysPressed[e.key.toLowerCase()] = false;
+        }
+    });
+
     function getRandomPastelColor() { return `hsl(${Math.random() * 360},${25 + Math.random() * 70}%,${75 + Math.random() * 10}%)`; }
     function getRandomBotColor() { const c = ['#ff5733', '#33ff57', '#3357ff', '#ff33a1', '#a133ff', '#ffff33', '#ff9033', '#33ffC7', '#f075e6', '#75f0dd']; return c[Math.floor(Math.random() * c.length)]; }
     function darkenColor(color, percent) {
@@ -1098,7 +1634,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 let parts = color.match(/\d+/g).map(Number); let amt = Math.round(2.55 * percent * (255 / 100));
                 parts[0] = Math.max(0, Math.min(255, parts[0] - amt)); parts[1] = Math.max(0, Math.min(255, parts[1] - amt)); parts[2] = Math.max(0, Math.min(255, parts[2] - amt));
                 return `rgb(${parts[0]},${parts[1]},${parts[2]})`;
-            } else if (color.startsWith('hsl')) {
+            }
+            else if (color.startsWith('hsl')) {
                 let parts = color.match(/(\d+(\.\d+)?)/g).map(Number);
                 parts[2] = Math.max(0, Math.min(100, parts[2] - percent));
                 return `hsl(${parts[0]},${parts[1]}%,${parts[2]}%)`;
@@ -1106,4 +1643,569 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { return color; }
         return color;
     }
+
+    // --- AI EVOLUTION ADDITIONS START ---
+
+    // Ensure AiTypes and getDefaultAggressiveBotParams are available
+    var AiTypes = AiTypes || {}; // Should be populated by bots.js
+    // AiTypes.aggressive = AiTypes.aggressive || AggressiveBotAI; // AggressiveBotAI is defined in bots.js
+
+    const evolutionPanel = document.createElement('div');
+    evolutionPanel.id = 'evolutionPanel';
+    evolutionPanel.style.cssText = `
+    position: fixed; top: 50%; left: 10px; transform: translateY(-50%);
+    background: #f0f0f0; border: 1px solid #ccc; padding: 15px;
+    width: 280px; max-height: 90vh; overflow-y: auto; z-index: 500;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2); display: none; font-size: 12px;`;
+
+    evolutionPanel.innerHTML = `
+    <h3>AI Evolution</h3>
+    <div><label>Generations: <input type="number" id="evoGenCount" value="10" min="1" style="width: 60px;"></label></div>
+    <div><label>Matches/Gen: <input type="number" id="evoMatchCount" value="20" min="2" step="2" style="width: 60px;"></label></div>
+    <div><label>Win Threshold: <input type="number" id="evoWinThreshold" value="0.60" min="0.51" max="0.99" step="0.01" style="width: 60px;"></label></div>
+    <div><label>Mutation Rate (0-1): <input type="number" id="evoMutationRate" value="0.1" min="0.01" max="1" step="0.01" style="width: 60px;"></label></div>
+    <div><label>Mutation Scale (0-1): <input type="number" id="evoMutationScale" value="0.15" min="0.01" max="1" step="0.01" style="width: 60px;"></label></div>
+    <div><label>Sim Speed (1-1000x): <input type="number" id="evoSimSpeed" value="100" min="1" max="1000" style="width: 60px;"></label></div>
+    <button id="startEvolutionButton">Start Evolution</button>
+    <button id="stopEvolutionButton" style="display:none;">Stop Evolution</button>
+    <h4>Log:</h4>
+    <div id="evolutionLog" style="height: 200px; overflow-y: scroll; border: 1px solid #ddd; background: white; padding: 5px; margin-top: 5px; font-size: 10px;"></div>
+    <h4>Best Parameters:</h4>
+    <textarea id="bestEvoParams" style="width: 95%; height: 100px; font-size: 9px;"></textarea>
+`;
+    document.body.appendChild(evolutionPanel);
+
+    const evolutionToggleButton = document.createElement('button');
+    evolutionToggleButton.textContent = "AI Evo";
+    evolutionToggleButton.style.cssText = `
+    position: fixed; top: 10px; left: calc(50% - 50px); z-index: 500;
+    padding: 5px 10px; background: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer;`;
+    evolutionToggleButton.onclick = () => {
+        evolutionPanel.style.display = evolutionPanel.style.display === 'none' ? 'block' : 'none';
+    };
+    document.body.appendChild(evolutionToggleButton);
+
+
+    let evolutionManager = null;
+    let stopEvolutionFlag = false;
+
+    document.getElementById('startEvolutionButton').addEventListener('click', () => {
+        if (evolutionManager) {
+            logToEvolution("Evolution already in progress or finished. Stop first or refresh.");
+            return;
+        }
+        const genCount = parseInt(document.getElementById('evoGenCount').value);
+        const matchCount = parseInt(document.getElementById('evoMatchCount').value);
+        const winThreshold = parseFloat(document.getElementById('evoWinThreshold').value);
+        const mutationRate = parseFloat(document.getElementById('evoMutationRate').value);
+        const mutationScale = parseFloat(document.getElementById('evoMutationScale').value);
+        const simSpeed = parseInt(document.getElementById('evoSimSpeed').value);
+
+        // Use a distinct set of game settings for simulation
+        const simGameSettings = { ...defaultSettings }; // Start with defaults
+        simGameSettings.PLAYER_START_MASS = 200;
+        simGameSettings.MAX_FOOD_COUNT = 50;
+        simGameSettings.MAX_VIRUS_COUNT = 5;
+        simGameSettings.FOOD_SPAWN_INTERVAL = 500;
+        simGameSettings.VIRUS_SPAWN_INTERVAL = 5000;
+        simGameSettings.MAP_WIDTH = 1500;
+        simGameSettings.MAP_HEIGHT = 1500;
+        // Ensure all necessary fields for worldConstants are here
+        simGameSettings.MIN_SPEW_MASS_TOTAL = simGameSettings.MIN_SPEW_MASS_TOTAL || 50;
+        simGameSettings.VIRUS_EAT_MASS_MULTIPLIER = simGameSettings.VIRUS_EAT_MASS_MULTIPLIER || 1.3;
+        simGameSettings.PLAYER_SPLITS_ON_VIRUS_EAT = simGameSettings.PLAYER_SPLITS_ON_VIRUS_EAT !== undefined ? simGameSettings.PLAYER_SPLITS_ON_VIRUS_EAT : true;
+        simGameSettings.VIRUS_SPLIT_LOW_MAX_PIECES = simGameSettings.VIRUS_SPLIT_LOW_MAX_PIECES || 10;
+        simGameSettings.AGGRESSIVE_BOT_SPLIT_EAT_FACTOR = simGameSettings.AGGRESSIVE_BOT_SPLIT_EAT_FACTOR || 1.1;
+
+
+        const simWorldConstants = {
+            MAP_WIDTH: simGameSettings.MAP_WIDTH, MAP_HEIGHT: simGameSettings.MAP_HEIGHT,
+            MIN_SPEW_MASS: simGameSettings.MIN_SPEW_MASS_TOTAL,
+            CELL_MIN_MASS_TO_SPLIT_FROM: simGameSettings.CELL_MIN_MASS_TO_SPLIT_FROM,
+            MIN_MASS_PER_SPLIT_PIECE: simGameSettings.MIN_MASS_PER_SPLIT_PIECE,
+            MAX_PLAYER_CELLS: simGameSettings.MAX_PLAYER_CELLS,
+            VIRUS_MASS_ABSORBED: simGameSettings.VIRUS_MASS_MAX,
+            VIRUS_EAT_MASS_MULTIPLIER: simGameSettings.VIRUS_EAT_MASS_MULTIPLIER,
+            PLAYER_SPLITS_ON_VIRUS_EAT: simGameSettings.PLAYER_SPLITS_ON_VIRUS_EAT,
+            VIRUS_MAX_SPLIT: simGameSettings.VIRUS_SPLIT_LOW_MAX_PIECES,
+            EAT_MASS_RATIO: simGameSettings.EAT_MASS_RATIO,
+            PLAYER_MAX_SPEED: simGameSettings.PLAYER_BASE_SPEED,
+            PLAYER_MIN_SPEED: simGameSettings.PLAYER_MIN_SPEED_CAP,
+            EAT_MASS_RATIO_FOR_SPLIT: simGameSettings.EAT_MASS_RATIO * simGameSettings.AGGRESSIVE_BOT_SPLIT_EAT_FACTOR,
+            CELL_RADIUS_MASS_FACTOR: 4,
+            GAME_GLOBAL_MERGE_COOLDOWN_MAX_MS: simGameSettings.GLOBAL_MERGE_COOLDOWN_MAX_MS,
+            FOOD_MASS_MAX: simGameSettings.FOOD_MASS_MAX, // For AI logic if it uses it
+            FOOD_MASS_MIN: simGameSettings.FOOD_MASS_MIN, // For AI logic
+        };
+
+        // Ensure getDefaultAggressiveBotParams is available (defined in bots.js)
+        if (typeof getDefaultAggressiveBotParams !== 'function') {
+            logToEvolution("ERROR: getDefaultAggressiveBotParams is not defined. bots.js might not be loaded correctly.");
+            return;
+        }
+
+        evolutionManager = new EvolutionManager(
+            getDefaultAggressiveBotParams(),
+            simGameSettings,
+            simWorldConstants,
+            { genCount, matchCount, winThreshold, mutationRate, mutationScale, simSpeed }
+        );
+        stopEvolutionFlag = false;
+        document.getElementById('startEvolutionButton').style.display = 'none';
+        document.getElementById('stopEvolutionButton').style.display = 'inline-block';
+        evolutionManager.startEvolution().then(() => {
+            logToEvolution("Evolution finished or stopped.");
+            document.getElementById('startEvolutionButton').style.display = 'inline-block';
+            document.getElementById('stopEvolutionButton').style.display = 'none';
+            evolutionManager = null;
+        }).catch(err => {
+            logToEvolution("ERROR during evolution: " + err.message);
+            console.error("Evolution error:", err);
+            document.getElementById('startEvolutionButton').style.display = 'inline-block';
+            document.getElementById('stopEvolutionButton').style.display = 'none';
+            evolutionManager = null;
+        });
+    });
+
+    document.getElementById('stopEvolutionButton').addEventListener('click', () => {
+        stopEvolutionFlag = true;
+        logToEvolution("Stopping evolution...");
+    });
+
+    function logToEvolution(message) {
+        const logDiv = document.getElementById('evolutionLog');
+        const time = new Date().toLocaleTimeString();
+        logDiv.innerHTML += `[${time}] ${message}<br>`;
+        logDiv.scrollTop = logDiv.scrollHeight;
+        console.log(`[EVO LOG] ${message}`);
+    }
+
+    function updateBestParamsDisplay(params) {
+        document.getElementById('bestEvoParams').value = JSON.stringify(params, null, 2);
+    }
+
+
+    class SimulationGame {
+        constructor(bot1Name, bot1Params, bot2Name, bot2Params, gameSettingsForSim, worldConstantsForSim, simSpeedFactor = 100) {
+            this.gameSettings = { ...gameSettingsForSim }; // Use a copy of settings specific to this simulation
+            this.worldConstants = { ...worldConstantsForSim }; // Use a copy of world constants specific to this simulation
+            this.simSpeedFactor = Math.max(1, simSpeedFactor);
+            this.internal_dt = 50;
+            this.steps_per_tick = Math.max(1, Math.floor(this.simSpeedFactor * (this.internal_dt / 16.666))); // 16.666 for ~60 FPS base
+
+            const simUniqueIdStart = getUniqueId() + 1000; // Try to avoid collision with main game IDs
+            let simUIDCounter = 0;
+            this.getSimUniqueId = () => simUniqueIdStart + simUIDCounter++;
+
+
+            this.bot1Controller = new PlayerController(this.getSimUniqueId(), bot1Name, this.gameSettings.PLAYER_START_MASS, '#FF0000', true, 'aggressive', this.worldConstants, bot1Params);
+            this.bot2Controller = new PlayerController(this.getSimUniqueId(), bot2Name, this.gameSettings.PLAYER_START_MASS, '#0000FF', true, 'aggressive', this.worldConstants, bot2Params);
+
+            this.players = [this.bot1Controller, this.bot2Controller];
+            this.food = [];
+            this.viruses = [];
+            this.spewedMasses = [];
+            this.lastDecayTime = 0;
+            this.lastFoodSpawnTime = 0;
+            this.lastVirusSpawnTime = 0;
+            this.currentTime = 0;
+
+            this.reset();
+        }
+
+        reset() {
+            this.currentTime = 0;
+            this.lastDecayTime = 0; this.lastFoodSpawnTime = 0; this.lastVirusSpawnTime = 0;
+            this.food = []; this.viruses = []; this.spewedMasses = [];
+
+            this.players.forEach(p => {
+                p.cells = []; p.globalMergeCooldown = 0;
+            });
+
+            const startMass = this.gameSettings.PLAYER_START_MASS;
+            // Manually create initial cells for bots, PlayerController's spawnInitialCell might use global gameSettings
+            const cell1 = new Cell(this.gameSettings.MAP_WIDTH * 0.25, this.gameSettings.MAP_HEIGHT / 2, startMass, this.bot1Controller.color, this.bot1Controller.name, this.bot1Controller.id, true);
+            cell1.id = this.getSimUniqueId();
+            this.bot1Controller.cells.push(cell1);
+
+            const cell2 = new Cell(this.gameSettings.MAP_WIDTH * 0.75, this.gameSettings.MAP_HEIGHT / 2, startMass, this.bot2Controller.color, this.bot2Controller.name, this.bot2Controller.id, true);
+            cell2.id = this.getSimUniqueId();
+            this.bot2Controller.cells.push(cell2);
+
+            for (let i = 0; i < this.gameSettings.MAX_FOOD_COUNT / 2; i++) this.spawnFoodSim();
+            for (let i = 0; i < this.gameSettings.MAX_VIRUS_COUNT / 2; i++) this.spawnVirusSim();
+        }
+
+        spawnFoodSim() {
+            if (this.food.length < this.gameSettings.MAX_FOOD_COUNT) {
+                const mass = this.gameSettings.FOOD_MASS_MIN + Math.random() * (this.gameSettings.FOOD_MASS_MAX - this.gameSettings.FOOD_MASS_MIN);
+                const radius = 4 + Math.sqrt(mass) * 4;
+                const x = Math.random() * (this.gameSettings.MAP_WIDTH - radius * 2) + radius;
+                const y = Math.random() * (this.gameSettings.MAP_HEIGHT - radius * 2) + radius;
+                const f = new Food(x, y); // Food's constructor uses global gameSettings for mass range. This is acceptable for sim.
+                f.id = this.getSimUniqueId();
+                this.food.push(f);
+            }
+        }
+
+        spawnVirusSim() {
+            if (this.viruses.length < this.gameSettings.MAX_VIRUS_COUNT) {
+                const mass = this.gameSettings.VIRUS_MASS_MIN + Math.random() * (this.gameSettings.VIRUS_MASS_MAX - this.gameSettings.VIRUS_MASS_MIN);
+                const radius = 4 + Math.sqrt(mass) * 4.5;
+                const x = Math.random() * (this.gameSettings.MAP_WIDTH - radius * 2) + radius;
+                const y = Math.random() * (this.gameSettings.MAP_HEIGHT - radius * 2) + radius;
+                const v = new Virus(x, y, Math.floor(mass)); // Virus constructor uses global gameSettings for mass/color
+                v.id = this.getSimUniqueId();
+                this.viruses.push(v);
+            }
+        }
+
+        stepSimulation() {
+            let winnerId = null;
+            for (let step = 0; step < this.steps_per_tick; step++) {
+                if (winnerId) break;
+
+                const dt = this.internal_dt;
+                const dtFrameFactor = dt / (1000 / 60);
+
+                this.currentTime += dt;
+
+                if (this.currentTime - this.lastDecayTime > this.gameSettings.MASS_DECAY_INTERVAL) {
+                    this.players.forEach(p => p.applyMassDecay());
+                    this.lastDecayTime = this.currentTime;
+                }
+                if (this.currentTime - this.lastFoodSpawnTime > this.gameSettings.FOOD_SPAWN_INTERVAL) {
+                    this.spawnFoodSim();
+                    this.lastFoodSpawnTime = this.currentTime;
+                }
+                if (this.currentTime - this.lastVirusSpawnTime > this.gameSettings.VIRUS_SPAWN_INTERVAL) {
+                    this.spawnVirusSim();
+                    this.lastVirusSpawnTime = this.currentTime;
+                }
+
+                for (let j = this.spewedMasses.length - 1; j >= 0; j--) {
+                    this.spewedMasses[j].lifeTimer -= dt; // Manually decrease timer for sim
+                    if (this.spewedMasses[j].lifeTimer <= 0) {
+                        this.spewedMasses.splice(j, 1);
+                    } else {
+                        // SpewedMass.update uses global gameSettings for damping and bounds.
+                        // For sim, this might need context. For now, assume it's okay or AI doesn't rely on precise spew physics.
+                        this.spewedMasses[j].update(dt, dtFrameFactor);
+                    }
+                }
+
+                this.viruses.forEach(v => { // Minimal virus update for sim
+                    v.animateRadiusLogic(dtFrameFactor);
+                    if (v.ejectionTimer > 0) {
+                        v.ejectionTimer -= dt;
+                        // Simplified ejection for sim, main game has more complex update
+                        v.x += v.ejectionVx * dtFrameFactor; v.y += v.ejectionVy * dtFrameFactor;
+                        v.x = Math.max(v.radius, Math.min(v.x, this.gameSettings.MAP_WIDTH - v.radius));
+                        v.y = Math.max(v.radius, Math.min(v.y, this.gameSettings.MAP_HEIGHT - v.radius));
+                    }
+                });
+
+                const allEntitiesForAI = { food: this.food, viruses: this.viruses, players: this.players, spewedMasses: this.spewedMasses };
+                this.players.forEach(p => {
+                    if (p.cells.length > 0) {
+                        // Pass the simulation's spewedMasses array to initiateSpew
+                        const originalInitiateSpew = p.initiateSpew;
+                        p.initiateSpew = () => originalInitiateSpew.call(p, this.spewedMasses);
+                        p.update(dt, dtFrameFactor, allEntitiesForAI);
+                        p.initiateSpew = originalInitiateSpew; // Restore original
+                    }
+                });
+
+                this.checkCollisionsSim();
+
+
+                if (this.bot1Controller.cells.length === 0 && this.bot1Controller.getTotalMass() === 0) {
+                    winnerId = this.bot2Controller.id;
+                    break;
+                }
+                if (this.bot2Controller.cells.length === 0 && this.bot2Controller.getTotalMass() === 0) {
+                    winnerId = this.bot1Controller.id;
+                    break;
+                }
+                if (this.currentTime > 300000) { // Max 5 minutes game time (300,000 ms)
+                    winnerId = null; // Timeout
+                    break;
+                }
+            }
+            return winnerId;
+        }
+
+        runMatch(maxTicks = 6000) { // MaxTicks: e.g. 6000 * 50ms = 300s = 5 minutes game time
+            this.reset();
+            for (let tick = 0; tick < maxTicks; tick++) {
+                const winnerId = this.stepSimulation();
+                if (winnerId !== undefined && winnerId !== null) { // Explicitly check for non-null winner ID
+                    return winnerId;
+                }
+                if (winnerId === null && this.currentTime > 300000) { // Timeout scenario from stepSimulation
+                    break;
+                }
+            }
+            const mass1 = this.bot1Controller.getTotalMass();
+            const mass2 = this.bot2Controller.getTotalMass();
+            if (mass1 > mass2 * 1.1) return this.bot1Controller.id;
+            if (mass2 > mass1 * 1.1) return this.bot2Controller.id;
+            return null; // Draw or timeout with no clear mass advantage
+        }
+
+        checkCollisionsSim() {
+            this.players.forEach(controller => {
+                for (let i = controller.cells.length - 1; i >= 0; i--) {
+                    if (i >= controller.cells.length) continue;
+                    const cell = controller.cells[i];
+                    if (!cell || cell.mass <= 0) continue;
+
+                    for (let j = this.food.length - 1; j >= 0; j--) {
+                        const f = this.food[j]; if (!f) continue;
+                        if (isColliding(cell, f, "food")) {
+                            cell.mass += f.mass; cell.updateRadiusAndTarget(); this.food.splice(j, 1);
+                        }
+                    }
+                    for (let j = this.spewedMasses.length - 1; j >= 0; j--) {
+                        const sm = this.spewedMasses[j]; if (!sm) continue;
+                        if (isColliding(cell, sm, "spewed") && cell.mass > sm.mass * 1.1) {
+                            cell.mass += sm.mass; cell.updateRadiusAndTarget(); this.spewedMasses.splice(j, 1);
+                        }
+                    }
+
+                    let virusEatenAndCellSplit = false;
+                    for (let j = this.viruses.length - 1; j >= 0; j--) {
+                        const v = this.viruses[j]; if (!v) continue;
+                        if (!controller.cells.includes(cell) || cell.mass <= 0) {
+                            virusEatenAndCellSplit = true; break;
+                        }
+                        if (isColliding(cell, v, "virus") && cell.mass >= v.mass * this.gameSettings.VIRUS_EAT_MASS_MULTIPLIER) {
+                            cell.mass += v.mass; cell.updateRadiusAndTarget();
+                            const eatenVirusId = v.id;
+                            this.viruses.splice(j, 1);
+                            controller.handleVirusEatSplit(cell);
+                            virusEatenAndCellSplit = true; break;
+                        }
+                    }
+                    if (virusEatenAndCellSplit) continue;
+                }
+            });
+
+            for (let i = this.spewedMasses.length - 1; i >= 0; i--) {
+                const sm = this.spewedMasses[i]; if (!sm) continue;
+                for (let j = this.viruses.length - 1; j >= 0; j--) {
+                    const v = this.viruses[j]; if (!v) continue;
+                    if (isColliding(sm, v, "virus_feed")) {
+                        v.onFed(sm, this.viruses, this.gameSettings); // Pass simulation's viruses array and gameSettings
+                        this.spewedMasses.splice(i, 1); break;
+                    }
+                }
+            }
+
+            const p1Cells = [...this.bot1Controller.cells];
+            const p2Cells = [...this.bot2Controller.cells];
+
+            for (let i = p1Cells.length - 1; i >= 0; i--) {
+                const cellA = p1Cells[i];
+                if (!cellA || cellA.mass <= 0) continue;
+                for (let j = p2Cells.length - 1; j >= 0; j--) {
+                    const cellB = p2Cells[j];
+                    if (!cellB || cellB.mass <= 0) continue;
+
+                    if (isColliding(cellA, cellB, "cell")) {
+                        let eater, eatee, eaterController, eateeController;
+                        if (cellA.mass >= cellB.mass * this.gameSettings.EAT_MASS_RATIO && cellA.mass > cellB.mass + 1) {
+                            eater = cellA; eatee = cellB;
+                            eaterController = this.bot1Controller; eateeController = this.bot2Controller;
+                        } else if (cellB.mass >= cellA.mass * this.gameSettings.EAT_MASS_RATIO && cellB.mass > cellA.mass + 1) {
+                            eater = cellB; eatee = cellA;
+                            eaterController = this.bot2Controller; eateeController = this.bot1Controller;
+                        }
+
+                        if (eater) {
+                            eater.mass += eatee.mass; eatee.mass = 0;
+                            eater.updateRadiusAndTarget();
+                            eateeController.cells = eateeController.cells.filter(c => c.id !== eatee.id);
+                            if (eatee === cellA) { p1Cells.splice(i, 1); break; } // cellA eaten, re-evaluate outer loop
+                            if (eatee === cellB) { p2Cells.splice(j, 1); } // cellB eaten, continue inner loop with next cellB
+                        }
+                    }
+                }
+            }
+            this.bot1Controller.cells = this.bot1Controller.cells.filter(c => c.mass > 0);
+            this.bot2Controller.cells = this.bot2Controller.cells.filter(c => c.mass > 0);
+        }
+    }
+
+
+    class EvolutionManager {
+        constructor(initialParams, gameSettings, worldConstants, evoSettings) {
+            this.currentBestParams = { ...initialParams };
+            this.gameSettings = gameSettings; // These are sim-specific game settings
+            this.worldConstants = worldConstants; // These are sim-specific world constants
+            this.evoSettings = evoSettings;
+            this.generationCount = 0;
+            this.mutableParamsConfig = {
+                DANGER_PERCEPTION_BUFFER_EATER: { min: 50, max: 400, type: 'int', scaleFactor: 20 },
+                DANGER_PERCEPTION_BUFFER_STALEMATE: { min: 30, max: 250, type: 'int', scaleFactor: 15 },
+                FOOD_SAFETY_BUFFER_EATER: { min: 50, max: 250, type: 'int', scaleFactor: 10 },
+                FOOD_SAFETY_BUFFER_STALEMATE: { min: 20, max: 150, type: 'int', scaleFactor: 10 },
+                FLEE_STATE_PROJECTION_DISTANCE: { min: 300, max: 1000, type: 'int', scaleFactor: 50 },
+                SPLIT_TO_HUNT_MAX_DIST_FACTOR: { min: 3, max: 12, type: 'float', scaleFactor: 0.5 },
+                SPLIT_TO_HUNT_MIN_MASS_ADVANTAGE_POST_SPLIT: { min: 1.1, max: 2.5, type: 'float', scaleFactor: 0.1 },
+                MAX_DIST_FOR_TARGETED_FOOD_SPLIT_FACTOR: { min: 3, max: 10, type: 'float', scaleFactor: 0.5 },
+                VIRUS_EAT_MIN_MASS_THRESHOLD: { min: 100, max: 200, type: 'int', scaleFactor: 10 },
+                MIN_VIRUS_EAT_MASS_GAIN_RATIO: { min: 1.01, max: 1.5, type: 'float', scaleFactor: 0.05 },
+                HUNT_EAT_MASS_RATIO_ADVANTAGE: { min: 1.01, max: 1.5, type: 'float', scaleFactor: 0.02 },
+                MAX_HUNT_DISTANCE_FACTOR: { min: 8, max: 25, type: 'float', scaleFactor: 1 },
+                LOW_MASS_THRESHOLD_FOR_AGGRESSIVE_SPLIT: { min: 30, max: 100, type: 'int', scaleFactor: 5 },
+                CRITICAL_THREAT_NO_SPLIT_RADIUS_FACTOR_BASE: { min: 2, max: 8, type: 'float', scaleFactor: 0.3 },
+                GENERAL_SPLIT_COOLDOWN_MS: { min: 50, max: 500, type: 'int', scaleFactor: 20 },
+                PATH_THREAT_COS_ANGLE_THRESHOLD: { min: 0.5, max: 0.95, type: 'float', scaleFactor: 0.05 },
+                TOTAL_MASS_SUPERIORITY_THRESHOLD: { min: 1.1, max: 2.0, type: 'float', scaleFactor: 0.1 },
+            };
+            this.mutableParamKeys = Object.keys(this.mutableParamsConfig);
+            updateBestParamsDisplay(this.currentBestParams);
+        }
+
+        mutate(params) {
+            const newParams = { ...params };
+            let mutatedCount = 0;
+            for (const key of this.mutableParamKeys) {
+                if (Math.random() < this.evoSettings.mutationRate) {
+                    mutatedCount++;
+                    const config = this.mutableParamsConfig[key];
+                    let currentValue = newParams[key];
+                    let change = (Math.random() * 2 - 1) * this.evoSettings.mutationScale * config.scaleFactor;
+
+                    if (config.type === 'float') {
+                        currentValue += change;
+                        currentValue = parseFloat(currentValue.toFixed(4)); // Keep precision reasonable
+                        currentValue = Math.max(config.min, Math.min(config.max, currentValue));
+                    } else if (config.type === 'int') {
+                        currentValue += Math.round(change);
+                        currentValue = Math.max(config.min, Math.min(config.max, currentValue));
+                    }
+                    newParams[key] = currentValue;
+                }
+            }
+            if (mutatedCount === 0 && this.mutableParamKeys.length > 0 && Math.random() < 0.5) { // Force one mutation sometimes
+                const randomKey = this.mutableParamKeys[Math.floor(Math.random() * this.mutableParamKeys.length)];
+                const config = this.mutableParamsConfig[randomKey];
+                let currentValue = newParams[randomKey];
+                let change = (Math.random() * 2 - 1) * this.evoSettings.mutationScale * config.scaleFactor;
+                if (config.type === 'float') {
+                    currentValue += change;
+                    currentValue = parseFloat(currentValue.toFixed(4));
+                } else if (config.type === 'int') {
+                    currentValue += Math.round(change);
+                }
+                newParams[randomKey] = Math.max(config.min, Math.min(config.max, currentValue));
+            }
+            return newParams;
+        }
+
+        async runGeneration() {
+            this.generationCount++;
+            logToEvolution(`--- Generation ${this.generationCount} ---`);
+
+            const mutatedParams = this.mutate(this.currentBestParams);
+            const changed = this.getChangedParams(this.currentBestParams, mutatedParams);
+            if (Object.keys(changed).length > 0) {
+                logToEvolution(`Mutated params: ${JSON.stringify(changed)}`);
+            } else {
+                logToEvolution("No parameters mutated this generation (or changes were too small).");
+            }
+
+
+            let wins = 0;
+            let losses = 0;
+            let draws = 0;
+
+            const totalMatches = this.evoSettings.matchCount;
+            const matchesPerSide = Math.floor(totalMatches / 2);
+
+            for (let i = 0; i < totalMatches; i++) {
+                if (stopEvolutionFlag) break;
+
+                let sim;
+                let challengerIsBot1;
+
+                if (i < matchesPerSide) {
+                    sim = new SimulationGame("Challenger", mutatedParams, "Champion", this.currentBestParams, this.gameSettings, this.worldConstants, this.evoSettings.simSpeed);
+                    challengerIsBot1 = true;
+                } else {
+                    sim = new SimulationGame("Champion", this.currentBestParams, "Challenger", mutatedParams, this.gameSettings, this.worldConstants, this.evoSettings.simSpeed);
+                    challengerIsBot1 = false;
+                }
+
+                const winnerId = sim.runMatch();
+
+                if (winnerId) {
+                    if (challengerIsBot1 && winnerId === sim.bot1Controller.id) wins++;
+                    else if (!challengerIsBot1 && winnerId === sim.bot2Controller.id) wins++;
+                    else losses++;
+                } else {
+                    draws++;
+                }
+                if ((i + 1) % 5 === 0 || i === totalMatches - 1) { // Log progress periodically
+                    logToEvolution(`Match ${i + 1}/${totalMatches}: Wins: ${wins}, Losses: ${losses}, Draws: ${draws}`);
+                }
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+
+            if (stopEvolutionFlag) {
+                logToEvolution("Evolution stopped by user.");
+                return;
+            }
+
+            const playedMatches = wins + losses;
+            const winRate = playedMatches > 0 ? wins / playedMatches : 0;
+            logToEvolution(`Generation ${this.generationCount} results: WinRate: ${winRate.toFixed(3)} (W: ${wins}, L: ${losses}, D: ${draws})`);
+
+            if (winRate >= this.evoSettings.winThreshold && playedMatches > totalMatches * 0.5) { // Ensure enough decisive matches
+                this.currentBestParams = mutatedParams;
+                logToEvolution(`New best parameters adopted!`);
+                updateBestParamsDisplay(this.currentBestParams);
+            } else {
+                logToEvolution(`Mutation did not meet threshold or too many draws.`);
+            }
+        }
+
+        getChangedParams(oldP, newP) {
+            const changed = {};
+            for (const key in newP) {
+                if (oldP.hasOwnProperty(key) && newP.hasOwnProperty(key) && oldP[key] !== newP[key]) {
+                    // Check for floating point precision issues before logging "change"
+                    if (typeof oldP[key] === 'number' && typeof newP[key] === 'number' && Math.abs(oldP[key] - newP[key]) < 1e-5) {
+                        // consider them same if difference is tiny
+                    } else {
+                        changed[key] = { old: oldP[key], new: newP[key] };
+                    }
+                }
+            }
+            return changed;
+        }
+
+        async startEvolution() {
+            logToEvolution("Starting AI Evolution...");
+            if (!AiTypes || !AiTypes.aggressive || typeof getDefaultAggressiveBotParams !== 'function') {
+                logToEvolution("ERROR: Aggressive AI components not loaded properly from bots.js!");
+                return;
+            }
+            for (let i = 0; i < this.evoSettings.genCount; i++) {
+                if (stopEvolutionFlag) break;
+                await this.runGeneration();
+                await new Promise(resolve => setTimeout(resolve, 10)); // Yield longer between generations
+            }
+            if (!stopEvolutionFlag) {
+                logToEvolution("Evolution run complete.");
+            }
+            logToEvolution(`Final Best Parameters: ${JSON.stringify(this.currentBestParams, null, 2)}`);
+            updateBestParamsDisplay(this.currentBestParams);
+        }
+    }
+
+    // --- AI EVOLUTION ADDITIONS END ---
+
 });
