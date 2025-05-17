@@ -286,10 +286,8 @@ class AggressiveBotAI {
         this.MIN_TIME_SINCE_SPLIT_TO_EAT_VIRUS_MS = 10;
         this.RECHECK_VIRUS_INTERVAL_MAX = 200;
         this.timeSinceLastVirusRecheck = this.RECHECK_VIRUS_INTERVAL_MAX;
-        this.VIRUS_PRIORITY_FOOD_EQUIVALENCE_THRESHOLD = 10; // Food mass equivalent
-        this.LARGE_BOT_VIRUS_PRIORITY_MASS_THRESHOLD = 300; // Bot mass above which virus is higher priority
-        this.VIRUS_TARGET_SCORE_BONUS = 1.5; // Higher score for virus targets
-        this.VIRUS_IGNORE_FOOD_SIG_CHECK_THRESHOLD = 150; // If bot mass above this, may ignore small food for good virus
+        this.VIRUS_PRIORITY_FOOD_EQUIVALENCE_THRESHOLD = 10;
+        this.LARGE_BOT_VIRUS_PRIORITY_MASS_THRESHOLD = 300;
 
         this.LOW_MASS_THRESHOLD_FOR_AGGRESSIVE_SPLIT = 65;
         this.CRITICAL_THREAT_NO_SPLIT_RADIUS_FACTOR_LOW_MASS = 7;
@@ -304,16 +302,6 @@ class AggressiveBotAI {
         this.LOW_MERGE_CD_FOR_MOBILITY_SPLIT_MS = 1000;
         this.MOBILITY_SPLIT_RELAX_CAUTION_FACTOR = 0.5;
         this.MOBILITY_SPLIT_COOLDOWN_REDUCTION_FACTOR = 0.5;
-
-        this.DESIRED_CELL_COUNT_FOR_MOBILITY = 2;
-        this.ANTI_BLOB_MIN_TOTAL_MASS = 200;
-        this.ANTI_BLOB_SPLIT_COOLDOWN_MS = 2000;
-        this.timeSinceLastAntiBlobSplit = this.ANTI_BLOB_SPLIT_COOLDOWN_MS;
-
-        this.FINISHER_MODE_OPPONENT_MAX_MASS_RATIO = 0.25;
-        this.FINISHER_MODE_OPPONENT_ABSOLUTE_MAX_MASS = 75;
-        this.FINISHER_MODE_HUNT_PRIORITY_MULTIPLIER = 3.0;
-        this.FINISHER_MODE_RISK_ACCEPTANCE_FACTOR_SPLIT = 1.2;
     }
 
     botCanEatOpponentController(botMass, opponentControllerTotalMass) {
@@ -325,7 +313,6 @@ class AggressiveBotAI {
         this.timeSinceLastVirusRecheck += dt;
         this.timeSinceLastAnySplitAttempt += dt;
         this.timeSinceLastOpponentRecheck += dt;
-        this.timeSinceLastAntiBlobSplit += dt;
 
         if (!this.botController.cells || this.botController.cells.length === 0) {
             this.currentAIState = 'IDLE_WANDER'; this.stateTimer = 0;
@@ -544,79 +531,7 @@ class AggressiveBotAI {
                     this.currentTargetVirus = null;
                 }
 
-                let isFinisherModeActive = false;
-                let bestFinisherTargetScore = -Infinity;
-                let finisherTargetCell = null;
-                let finisherTargetController = null;
-
-                if (!isCriticallyDangerousNearby) {
-                    for (const oppCtrl of allEntities.players) {
-                        if (oppCtrl.id === this.botController.id || !oppCtrl.cells || oppCtrl.cells.length === 0) continue;
-                        const oppTotalMass = oppCtrl.getTotalMass();
-                        if (oppTotalMass < botTotalMass * this.FINISHER_MODE_OPPONENT_MAX_MASS_RATIO ||
-                            oppTotalMass < this.FINISHER_MODE_OPPONENT_ABSOLUTE_MAX_MASS) {
-
-                            for (const oppCell of oppCtrl.cells) {
-                                if (oppCell.mass <= 0) continue;
-                                let canEatFinisherCell = false;
-                                for (const botCell of this.botController.cells) {
-                                    if (botCell.mass > oppCell.mass * this.worldConstants.EAT_MASS_RATIO * this.HUNT_EAT_MASS_RATIO_ADVANTAGE) {
-                                        canEatFinisherCell = true;
-                                        break;
-                                    }
-                                }
-                                if (!canEatFinisherCell && botCellCount < this.worldConstants.MAX_PLAYER_CELLS) {
-                                    for (const botCell of this.botController.cells) {
-                                        if (botCell.mass / 2 > oppCell.mass * this.worldConstants.EAT_MASS_RATIO * this.SPLIT_TO_HUNT_MIN_MASS_ADVANTAGE_POST_SPLIT * (1 / this.FINISHER_MODE_RISK_ACCEPTANCE_FACTOR_SPLIT)) {
-                                            canEatFinisherCell = true;
-                                            break;
-                                        }
-                                    }
-                                }
-
-                                if (canEatFinisherCell) {
-                                    const distSq = (botCom.x - oppCell.x) ** 2 + (botCom.y - oppCell.y) ** 2;
-                                    const score = (oppCell.mass / (distSq + 1)) * this.FINISHER_MODE_HUNT_PRIORITY_MULTIPLIER;
-                                    if (score > bestFinisherTargetScore) {
-                                        let finisherTargetCampedBySuperThreat = false;
-                                        for (const otherThreat of threateningOpponentCells) {
-                                            if (otherThreat.ownerId === oppCtrl.id) continue;
-                                            if (otherThreat.opponentTotalMass > botTotalMass * 1.5) {
-                                                const distSqSuperThreatToFinisher = (otherThreat.x - oppCell.x) ** 2 + (otherThreat.y - oppCell.y) ** 2;
-                                                if (distSqSuperThreatToFinisher < (otherThreat.radius + oppCell.radius + this.FOOD_SAFETY_BUFFER_EATER * 2.0) ** 2) {
-                                                    finisherTargetCampedBySuperThreat = true;
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        if (!finisherTargetCampedBySuperThreat) {
-                                            bestFinisherTargetScore = score;
-                                            finisherTargetCell = oppCell;
-                                            finisherTargetController = oppCtrl;
-                                            isFinisherModeActive = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (isFinisherModeActive && finisherTargetCell && finisherTargetController) {
-                    this.currentTargetOpponentCell = finisherTargetCell;
-                    this.currentTargetOpponentController = finisherTargetController;
-                    decidedToHuntOpponentThisFrame = true;
-                    this.currentAIState = 'HUNTING_OPPONENT';
-                    this.stateTimer = 7000;
-                    this.targetX = this.currentTargetOpponentCell.x;
-                    this.targetY = this.currentTargetOpponentCell.y;
-                    this.botController.targetX = this.targetX;
-                    this.botController.targetY = this.targetY;
-                    this.currentTargetFood = null;
-                    this.currentTargetVirus = null;
-                }
-
-                if (!isFinisherModeActive && !isCriticallyDangerousNearby && this.currentAIState !== 'CONSOLIDATING_DEFENSIVELY') {
+                if (!isCriticallyDangerousNearby && this.currentAIState !== 'CONSOLIDATING_DEFENSIVELY') {
                     if (this.timeSinceLastOpponentRecheck >= this.RECHECK_OPPONENT_TARGET_INTERVAL_MAX || !this.currentTargetOpponentCell || !this.isValidHuntTarget(this.currentTargetOpponentCell, this.currentTargetOpponentController, allEntities, botCom)) {
                         this.timeSinceLastOpponentRecheck = 0;
                         this.findBestHuntTarget(allEntities, botCom, threateningOpponentCells);
@@ -653,9 +568,7 @@ class AggressiveBotAI {
                                 const distToTargetSq = (botCell.x - this.currentTargetOpponentCell.x) ** 2 + (botCell.y - this.currentTargetOpponentCell.y) ** 2;
                                 if (distToTargetSq < (botCell.radius * this.SPLIT_TO_HUNT_MAX_DIST_FACTOR) ** 2) {
                                     const massAfterSplit = botCell.mass / 2;
-                                    const riskFactor = (this.currentAIState === 'HUNTING_OPPONENT' && isFinisherModeActive) ? (1 / this.FINISHER_MODE_RISK_ACCEPTANCE_FACTOR_SPLIT) : 1.0;
-
-                                    if (massAfterSplit > this.currentTargetOpponentCell.mass * this.worldConstants.EAT_MASS_RATIO * this.SPLIT_TO_HUNT_MIN_MASS_ADVANTAGE_POST_SPLIT * riskFactor) {
+                                    if (massAfterSplit > this.currentTargetOpponentCell.mass * this.worldConstants.EAT_MASS_RATIO * this.SPLIT_TO_HUNT_MIN_MASS_ADVANTAGE_POST_SPLIT) {
                                         let opponentCanRetaliatePostSplitHunt = false;
                                         const opponentControllerOfTarget = allEntities.players.find(p => p.id === this.currentTargetOpponentController.id);
                                         if (opponentControllerOfTarget) {
@@ -724,7 +637,7 @@ class AggressiveBotAI {
                                 if (!isLowRisk && isAcceptableRisk) effectiveMinGainDirect *= this.VIRUS_EAT_REWARD_BONUS_FOR_ACCEPTABLE_RISK;
                                 if (!(isLowRisk || isAcceptableRisk)) gainRatioDirect = 0;
                             }
-                            if (gainRatioDirect >= effectiveMinGainDirect / this.VIRUS_TARGET_SCORE_BONUS) {
+                            if (gainRatioDirect >= effectiveMinGainDirect) {
                                 const avgFoodMass = (this.worldConstants.FOOD_MASS_MAX + this.worldConstants.FOOD_MASS_MIN) / 2 || 2;
                                 if (potentialDirectEatVirus.mass > avgFoodMass * this.VIRUS_PRIORITY_FOOD_EQUIVALENCE_THRESHOLD || botTotalMass > this.LARGE_BOT_VIRUS_PRIORITY_MASS_THRESHOLD) {
                                     this.currentTargetVirus = potentialDirectEatVirus;
@@ -746,9 +659,9 @@ class AggressiveBotAI {
                                     if (!isLowRisk && isAcceptableRisk) effectiveMinGainConsolidate *= this.VIRUS_EAT_REWARD_BONUS_FOR_ACCEPTABLE_RISK;
                                     if (!(isLowRisk || isAcceptableRisk)) continue;
                                 }
-                                if (gainRatioConsolidate < effectiveMinGainConsolidate / this.VIRUS_TARGET_SCORE_BONUS) continue;
+                                if (gainRatioConsolidate < effectiveMinGainConsolidate) continue;
                                 const distSq = (virus.x - botCom.x) ** 2 + (virus.y - botCom.y) ** 2;
-                                const score = (virus.mass / (distSq + 1000)) * this.VIRUS_TARGET_SCORE_BONUS;
+                                const score = virus.mass / (distSq + 1000);
                                 if (score > maxConsolidationScore) { maxConsolidationScore = score; bestConsolidationVirus = virus; }
                             }
                             if (bestConsolidationVirus) {
@@ -768,33 +681,6 @@ class AggressiveBotAI {
                     if (botCellCount > this.HIGH_CELL_COUNT_CAUTIOUS_SPLIT_THRESHOLD) { currentGeneralSplitCooldown *= this.GENERAL_SPLIT_COOLDOWN_MS_HIGH_CELL_COUNT_FACTOR; }
                     if (botTotalMass > this.HIGH_MASS_CAUTIOUS_SPLIT_THRESHOLD) { currentGeneralSplitCooldown *= this.GENERAL_SPLIT_COOLDOWN_MS_HIGH_MASS_FACTOR; }
                 }
-
-                if (!decidedToHuntOpponentThisFrame && !decidedToSeekVirusThisFrame && !didSplitThisFrame &&
-                    this.timeSinceLastAntiBlobSplit >= this.ANTI_BLOB_SPLIT_COOLDOWN_MS && // Use separate cooldown for anti-blob
-                    botCellCount < this.DESIRED_CELL_COUNT_FOR_MOBILITY &&
-                    botTotalMass > this.ANTI_BLOB_MIN_TOTAL_MASS &&
-                    this.botController.globalMergeCooldown <= 0 &&
-                    !isSignificantlyDangerousNearby &&
-                    gameMaxMergeCD < this.LOW_MERGE_CD_FOR_MOBILITY_SPLIT_MS * 1.5) {
-
-                    let canAntiBlobSplit = this.botController.cells.some(cell => cell.mass >= this.worldConstants.CELL_MIN_MASS_TO_SPLIT_FROM * 1.2 && (cell.mass / 2) >= this.worldConstants.MIN_MASS_PER_SPLIT_PIECE * 1.1);
-                    if (canAntiBlobSplit) {
-                        let tempTargetX = this.targetX, tempTargetY = this.targetY;
-                        if (Math.hypot(tempTargetX - botCom.x, tempTargetY - botCom.y) < botCom.radius * 2) {
-                            const randomAngle = Math.random() * Math.PI * 2;
-                            tempTargetX = botCom.x + Math.cos(randomAngle) * botCom.radius * 4;
-                            tempTargetY = botCom.y + Math.sin(randomAngle) * botCom.radius * 4;
-                        }
-                        if (this.isSplitDestinationSafe(tempTargetX, tempTargetY, botCom, threateningOpponentCells, false)) {
-                            this.botController.targetX = tempTargetX; this.botController.targetY = tempTargetY;
-                            this.botController.initiateSplit();
-                            this.timeSinceLastAnySplitAttempt = 0;
-                            this.timeSinceLastAntiBlobSplit = 0;
-                            didSplitThisFrame = true;
-                        }
-                    }
-                }
-
 
                 if (!decidedToHuntOpponentThisFrame && !decidedToSeekVirusThisFrame && !didSplitThisFrame &&
                     this.timeSinceLastAnySplitAttempt >= currentGeneralSplitCooldown &&
@@ -868,7 +754,7 @@ class AggressiveBotAI {
                                     tempTargetX = botCom.x + splitDirX * (botCom.radius * (isMobilitySplitFavoredByLowMergeCD ? 5 : 3));
                                     tempTargetY = botCom.y + splitDirY * (botCom.radius * (isMobilitySplitFavoredByLowMergeCD ? 5 : 3));
                                 }
-                                const targetCellCountForMobility = isMobilitySplitFavoredByLowMergeCD ? Math.min(this.DESIRED_CELL_COUNT_FOR_MOBILITY + 1, this.worldConstants.MAX_PLAYER_CELLS) : 1;
+                                const targetCellCountForMobility = isMobilitySplitFavoredByLowMergeCD ? Math.min(4, this.worldConstants.MAX_PLAYER_CELLS) : 1;
 
                                 if (botCellCount < targetCellCountForMobility ||
                                     (botCellCount < this.worldConstants.MAX_PLAYER_CELLS && !isMobilitySplitFavoredByLowMergeCD)
@@ -887,17 +773,10 @@ class AggressiveBotAI {
                 if (!decidedToHuntOpponentThisFrame && !decidedToSeekVirusThisFrame && !didSplitThisFrame) {
                     if (this.currentTargetFood) {
                         const foodStillExists = allEntities.food.find(f => f && f.id === this.currentTargetFood.id);
-                        if (!foodStillExists || !this.isFoodSafe(this.currentTargetFood, botCom, threateningOpponentCells)) {
-                            this.currentTargetFood = null;
-                        } else if (botTotalMass > this.VIRUS_IGNORE_FOOD_SIG_CHECK_THRESHOLD && this.currentTargetVirus) {
-                            if (this.currentTargetFood.mass < botCom.mass * this.MIN_FOOD_MASS_SIGNIFICANCE_RATIO * 0.5) {
-                                this.currentTargetFood = null;
-                            }
-                        }
+                        if (!foodStillExists || !this.isFoodSafe(this.currentTargetFood, botCom, threateningOpponentCells)) this.currentTargetFood = null;
                     }
                     if (!this.currentTargetFood || this.timeSinceLastFoodRecheck >= this.RECHECK_FOOD_INTERVAL_MAX) {
-                        this.timeSinceLastFoodRecheck = 0;
-                        this.currentTargetFood = this.findClosestSafeFood(botCom, allEntities.food, threateningOpponentCells);
+                        this.timeSinceLastFoodRecheck = 0; this.currentTargetFood = this.findClosestSafeFood(botCom, allEntities.food, threateningOpponentCells);
                     }
                 }
 
